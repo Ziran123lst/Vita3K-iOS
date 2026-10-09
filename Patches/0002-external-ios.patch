@@ -3,9 +3,9 @@ index 794f836..bcfffc4 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -83,6 +83,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
-add_subdirectory(sdl)
-
-# Cubeb setup, from https://github.com/RPCS3/rpcs3/blob/master/3rdparty/cubeb/CMakeLists.txt
+ add_subdirectory(sdl)
+ 
+ # Cubeb setup, from https://github.com/RPCS3/rpcs3/blob/master/3rdparty/cubeb/CMakeLists.txt
 +# Cubeb is skipped on iOS: its CoreAudio backend is not guaranteed to build
 +# there, and the SDL audio backend is the default anyway.
 +if(NOT IOS)
@@ -13,15 +13,15 @@ set(BUILD_SHARED_LIBS FALSE CACHE BOOL "Don't build shared libs")
 set(BUILD_TESTS FALSE CACHE BOOL "Don't build tests")
 set(BUILD_RUST_LIBS FALSE CACHE BOOL "Don't build rust libs")
 @@ -103,6 +106,7 @@ elseif (ARCHITECTURE STREQUAL "x86_64")
-		_USE_SSE2
-	)
+ 		_USE_SSE2
+ 	)
 endif ()
 +endif()
-
+ 
 if(ANDROID)
 	if(ARCHITECTURE STREQUAL "arm64")
 @@ -224,7 +228,7 @@ target_include_directories(CLI11 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/cli11")
-
+ 
 add_library(vulkan INTERFACE)
 target_include_directories(vulkan INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/VulkanMemoryAllocator-Hpp/Vulkan-Headers/include")
 -if(APPLE)
@@ -55,7 +55,7 @@ elseif(ANDROID AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
 @@ -272,7 +292,7 @@ if(ANDROID)
 endif()
 add_subdirectory(ffmpeg)
-
+ 
 -if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
 +if((APPLE AND NOT IOS) OR NOT FORCE_BUILD_OPENSSL_MAC)
 	execute_process(
@@ -64,14 +64,14 @@ add_subdirectory(ffmpeg)
 @@ -285,7 +305,7 @@ if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
 	endif()
 endif()
-
+ 
 -if(NOT FORCE_BUILD_OPENSSL_MAC)
 +if((NOT FORCE_BUILD_OPENSSL_MAC) AND NOT IOS)
 	find_package(OpenSSL QUIET)
 endif()
-
+ 
 @@ -326,7 +346,10 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
-
+ 
 		if (NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" OR NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a")
 			message(STATUS "Building OpenSSL@4...")
 -			if (ARCHITECTURE STREQUAL "x86_64" OR ARCHITECTURE STREQUAL "arm64")

@@ -3,18 +3,18 @@ index d9edf97..f92d716 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -45,7 +45,7 @@ if(ANDROID)
-		set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
-	endif()
-else()
+ 		set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+ 	endif()
+ else()
 -	if((ARCHITECTURE STREQUAL "x86_64") OR APPLE)
 +	if(((ARCHITECTURE STREQUAL "x86_64") OR APPLE) AND NOT IOS)
-		option(USE_DISCORD_RICH_PRESENCE "Build Vita3K with Discord Rich Presence" ON)
-	endif()
-	option(BUILD_APPIMAGE "Build an AppImage." OFF)
+ 		option(USE_DISCORD_RICH_PRESENCE "Build Vita3K with Discord Rich Presence" ON)
+ 	endif()
+ 	option(BUILD_APPIMAGE "Build an AppImage." OFF)
 @@ -149,6 +149,13 @@ macro(boost_compile)
-			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
-			OUTPUT_QUIET
-		)
+ 			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
+ 			OUTPUT_QUIET
+ 		)
 +	elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
 +		execute_process(
 +			COMMAND ${b2_cmd_line_common} target-os=iphoneos architecture=arm address-model=64

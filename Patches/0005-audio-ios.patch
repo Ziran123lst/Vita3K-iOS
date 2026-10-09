@@ -17,7 +17,7 @@ add_library(
 -    src/impl/sdl_audio.cpp
 -    src/impl/cubeb_audio.cpp)
 +    ${AUDIO_IMPL_SOURCES})
-
+ 
 target_include_directories(audio PUBLIC include)
 -target_link_libraries(audio PRIVATE util cubeb SDL3::SDL3)
 +target_link_libraries(audio PRIVATE util SDL3::SDL3)
@@ -29,14 +29,14 @@ index 3a65f6d..9a23b38 100644
 --- a/vita3k/audio/src/audio.cpp
 +++ b/vita3k/audio/src/audio.cpp
 @@ -17,7 +17,9 @@
-
+ 
 #include <audio/state.h>
-
+ 
 +#ifndef __IPHONEOS__
 #include <audio/impl/cubeb_audio.h>
 +#endif
 #include <audio/impl/sdl_audio.h>
-
+ 
 #include <util/log.h>
 @@ -70,8 +72,10 @@ void AudioState::set_backend(const std::string &adapter_name) {
     adapter.reset();

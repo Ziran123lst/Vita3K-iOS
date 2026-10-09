@@ -3,9 +3,9 @@ index c5d693d..0124145 100644
 --- a/vita3k/app/src/app_init.cpp
 +++ b/vita3k/app/src/app_init.cpp
 @@ -257,6 +257,24 @@ bool init_paths(Root &root_paths) {
-    root_paths.set_shared_path(internal_storage_path);
-    root_paths.set_cache_path(internal_storage_path / "cache" / "");
-    root_paths.set_patch_path(internal_storage_path / "patch" / "");
+     root_paths.set_shared_path(internal_storage_path);
+     root_paths.set_cache_path(internal_storage_path / "cache" / "");
+     root_paths.set_patch_path(internal_storage_path / "patch" / "");
 +#elif defined(__IPHONEOS__)
 +    // iOS sandbox: the app bundle is read-only, so all user data goes to the
 +    // writable preference directory (exposed through the Files app when
@@ -25,5 +25,5 @@ index c5d693d..0124145 100644
 +    root_paths.set_cache_path(ios_pref_path / "cache" / "");
 +    root_paths.set_patch_path(ios_pref_path / "patch" / "");
  #else
-    auto sdl_exe_path = SDL_GetBasePath();
-    auto exe_path = fs_utils::utf8_to_path(sdl_exe_path);
+     auto sdl_exe_path = SDL_GetBasePath();
+     auto exe_path = fs_utils::utf8_to_path(sdl_exe_path);

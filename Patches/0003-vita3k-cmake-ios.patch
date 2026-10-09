@@ -3,14 +3,14 @@ index ab8edff..8320013 100644
 --- a/vita3k/CMakeLists.txt
 +++ b/vita3k/CMakeLists.txt
 @@ -103,7 +103,7 @@ if(NOT MSVC)
-	add_compile_options(-Wformat -Werror=format-security)
+ 	add_compile_options(-Wformat -Werror=format-security)
 endif()
-
+ 
 -if(NOT ANDROID)
 +if(NOT ANDROID AND NOT IOS)
 	include(${CMAKE_SOURCE_DIR}/cmake/qt6.cmake)
 endif()
-
+ 
 @@ -121,7 +121,7 @@ add_subdirectory(display)
 add_subdirectory(features)
 add_subdirectory(glutil)
@@ -33,7 +33,7 @@ else()
 endif()
 @@ -212,14 +216,14 @@ if(WIN32)
 endif()
-
+ 
 target_link_libraries(vita3k PRIVATE app audio compat config ctrl dialog display ime lang gdbstub gxm io miniz modules motion packages patch renderer sdl-frontend shader touch util psvpfsparser)
 -if(NOT ANDROID)
 +if(NOT ANDROID AND NOT IOS)
@@ -42,16 +42,16 @@ endif()
 if(USE_DISCORD_RICH_PRESENCE)
 	target_link_libraries(vita3k PRIVATE discord-rpc)
 endif()
-
+ 
 -if(NOT ANDROID)
 +if(NOT ANDROID AND NOT IOS)
 	file(GLOB VITA3K_QT_TS_FILES CONFIGURE_DEPENDS
 		"${CMAKE_SOURCE_DIR}/i18n/qt/*.ts")
 	set(VITA3K_QT_QM_DIR "${CMAKE_BINARY_DIR}/qt_translations")
 @@ -256,14 +260,17 @@ endif()
-
+ 
 set_target_properties(vita3k PROPERTIES OUTPUT_NAME Vita3K)
-
+ 
 -if(NOT ANDROID)
 +if(NOT ANDROID AND NOT IOS)
 	set_target_properties(vita3k PROPERTIES
@@ -59,7 +59,7 @@ set_target_properties(vita3k PROPERTIES OUTPUT_NAME Vita3K)
 		LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 		RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()
-
+ 
 -if(APPLE)
 +# macOS bundle handling (icon, Qt deployment, MoltenVK embedding, signing).
 +# The iOS bundle is assembled by vita3k/ios/CMakeLists.txt instead, since iOS
