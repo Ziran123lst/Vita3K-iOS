@@ -1,0 +1,7 @@
+# Build artifacts / local clones
+upstream/
+build-*/
+dist/
+
+# macOS
+.DS_Store

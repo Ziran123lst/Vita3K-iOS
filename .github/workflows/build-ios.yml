@@ -1,0 +1,40 @@
+name: iOS build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [device, simulator]
+    runs-on: macos-14
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bootstrap upstream (clone + overlay)
+        run: bash Scripts/bootstrap.sh
+
+      - name: Apply iOS patches
+        run: bash Scripts/apply-patches.sh
+
+      - name: Build (${{ matrix.target }})
+        run: bash Scripts/build-ios.sh ${{ matrix.target }}
+
+      - name: Package
+        run: bash Scripts/package-ios.sh ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vita3K-${{ matrix.target }}
+          path: |
+            dist/
+            build-${{ matrix.target }}/bin/Vita3K.app
+          if-no-files-found: error
