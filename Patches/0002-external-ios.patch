@@ -1,0 +1,84 @@
+diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
+index 794f836..bcfffc4 100644
+--- a/external/CMakeLists.txt
++++ b/external/CMakeLists.txt
+@@ -83,6 +83,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
+add_subdirectory(sdl)
+
+# Cubeb setup, from https://github.com/RPCS3/rpcs3/blob/master/3rdparty/cubeb/CMakeLists.txt
++# Cubeb is skipped on iOS: its CoreAudio backend is not guaranteed to build
++# there, and the SDL audio backend is the default anyway.
++if(NOT IOS)
+set(BUILD_SHARED_LIBS FALSE CACHE BOOL "Don't build shared libs")
+set(BUILD_TESTS FALSE CACHE BOOL "Don't build tests")
+set(BUILD_RUST_LIBS FALSE CACHE BOOL "Don't build rust libs")
+@@ -103,6 +106,7 @@ elseif (ARCHITECTURE STREQUAL "x86_64")
+		_USE_SSE2
+	)
+endif ()
++endif()
+
+if(ANDROID)
+	if(ARCHITECTURE STREQUAL "arm64")
+@@ -224,7 +228,7 @@ target_include_directories(CLI11 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/cli11")
+
+add_library(vulkan INTERFACE)
+target_include_directories(vulkan INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/VulkanMemoryAllocator-Hpp/Vulkan-Headers/include")
+-if(APPLE)
++if(APPLE AND NOT IOS)
+	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK-macos.tar")
+		message(STATUS "Downloading MoltenVK...")
+		file(DOWNLOAD https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.1/MoltenVK-macos.tar
+@@ -238,6 +242,22 @@ if(APPLE)
+	endif()
+	target_include_directories(vulkan INTERFACE "${CMAKE_BINARY_DIR}/external/MoltenVK/include")
+	set(MOLTENVK_DYLIB "${CMAKE_BINARY_DIR}/external/MoltenVK/dylib/macOS/libMoltenVK.dylib" PARENT_SCOPE)
++elseif(IOS)
++	# iOS has no native Vulkan driver: MoltenVK translates the Vulkan API to
++	# Metal, which is the only GPU API available on iOS. This is the same
++	# approach Vita3K uses on macOS.
++	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK-ios.tar")
++		message(STATUS "Downloading MoltenVK for iOS...")
++		file(DOWNLOAD https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.1/MoltenVK-ios.tar
++			"${CMAKE_BINARY_DIR}/external/MoltenVK-ios.tar"
++			SHOW_PROGRESS)
++	endif()
++	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK")
++		execute_process(COMMAND tar xf "${CMAKE_BINARY_DIR}/external/MoltenVK-ios.tar" --strip-components=1 MoltenVK/MoltenVK
++			WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external")
++	endif()
++	target_include_directories(vulkan INTERFACE "${CMAKE_BINARY_DIR}/external/MoltenVK/include")
++	set(MOLTENVK_DYLIB "${CMAKE_BINARY_DIR}/external/MoltenVK/dylib/iOS/libMoltenVK.dylib" PARENT_SCOPE)
+elseif(ANDROID AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
+	# add validation layer
+	if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../android/prebuilt/${ANDROID_ABI}/libVkLayer_khronos_validation.so")
+@@ -272,7 +292,7 @@ if(ANDROID)
+endif()
+add_subdirectory(ffmpeg)
+
+-if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
++if((APPLE AND NOT IOS) OR NOT FORCE_BUILD_OPENSSL_MAC)
+	execute_process(
+		COMMAND brew --prefix openssl
+		RESULT_VARIABLE BREW_RESULT
+@@ -285,7 +305,7 @@ if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
+	endif()
+endif()
+
+-if(NOT FORCE_BUILD_OPENSSL_MAC)
++if((NOT FORCE_BUILD_OPENSSL_MAC) AND NOT IOS)
+	find_package(OpenSSL QUIET)
+endif()
+
+@@ -326,7 +346,10 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+
+	if (NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" OR NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a")
+		message(STATUS "Building OpenSSL@4...")
+-		if (ARCHITECTURE STREQUAL "x86_64" OR ARCHITECTURE STREQUAL "arm64")
++		if (IOS)
++			execute_process(COMMAND perl Configure iphoneos-cross -isysroot ${CMAKE_OSX_SYSROOT} -miphoneos-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
++			execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
++		elseif (ARCHITECTURE STREQUAL "x86_64" OR ARCHITECTURE STREQUAL "arm64")
+			execute_process(COMMAND perl Configure darwin64-${ARCHITECTURE} -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
+			execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
+		else()
