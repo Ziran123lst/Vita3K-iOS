@@ -3,7 +3,7 @@ index d9edf97..f92d716 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -45,7 +45,7 @@ if(ANDROID)
-	set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+		set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 	endif()
 else()
 -	if((ARCHITECTURE STREQUAL "x86_64") OR APPLE)
