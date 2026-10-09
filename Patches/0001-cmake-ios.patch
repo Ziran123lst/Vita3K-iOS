@@ -22,6 +22,6 @@ index d9edf97..f92d716 100644
 +			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
 +			OUTPUT_QUIET
 +		)
-	elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-		execute_process(
-			COMMAND ${b2_cmd_line_common} --ignore-site-config toolset=${BOOST_TOOLSET} stage
+ 	elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+ 		execute_process(
+ 			COMMAND ${b2_cmd_line_common} --ignore-site-config toolset=${BOOST_TOOLSET} stage
