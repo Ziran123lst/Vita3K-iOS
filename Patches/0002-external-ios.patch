@@ -1,5 +1,5 @@
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 794f836..67bb43d 100644
+index 794f836..a8ee6ea 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -83,6 +83,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
@@ -72,7 +72,7 @@ index 794f836..67bb43d 100644
  	find_package(OpenSSL QUIET)
  endif()
  
-@@ -326,7 +348,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -326,7 +348,14 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
  
  		if (NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" OR NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a")
  			message(STATUS "Building OpenSSL@4...")
