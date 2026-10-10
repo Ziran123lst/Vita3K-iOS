@@ -1,5 +1,5 @@
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 794f836..741c63f 100644
+index 794f836..5d8225f 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -83,6 +83,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
@@ -102,3 +102,14 @@ index 794f836..741c63f 100644
  	endif()
  	find_package(OpenSSL REQUIRED)
  endif()
+@@ -464,7 +500,9 @@ endif()
+ # Use XDG desktop portals on Linux
+ set(NFD_PORTAL ON)
+ 
+-if(NOT ANDROID)
++# nativefiledialog-extended is a desktop file dialog: it links AppKit on
++# Apple platforms, which does not exist on iOS. Skip it there.
++if(NOT ANDROID AND NOT IOS)
+ 	# nativefiledialog-extended
+ 	add_subdirectory(nativefiledialog-extended)
+ 
