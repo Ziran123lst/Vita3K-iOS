@@ -43,11 +43,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include <filesystem>
 #include <string>
 #include <vector>
-
-namespace fs = std::filesystem;
 
 namespace {
 
@@ -101,7 +98,7 @@ SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Colo
                     continue;
                 for (int dy = 0; dy < SCALE; ++dy) {
                     for (int dx = 0; dx < SCALE; ++dx) {
-                        SDL_WritePixel(surface, cursor_x + col * SCALE + dx, PAD + row * SCALE + dy,
+                        SDL_WriteSurfacePixel(surface, cursor_x + col * SCALE + dx, PAD + row * SCALE + dy,
                             SDL_MapSurfaceRGBA(surface, color.r, color.g, color.b, color.a));
                     }
                 }
