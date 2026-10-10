@@ -86,26 +86,35 @@ SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Colo
     if (!surface)
         return nullptr;
 
-    int cursor_x = PAD;
-    for (unsigned char c : text) {
-        if (c < 0x20 || c > 0x7e)
-            c = '?';
-        const auto &glyph = FONT5X7[c - 0x20];
-        for (int row = 0; row < GLYPH_H; ++row) {
-            const unsigned char bits = glyph[row];
-            for (int col = 0; col < GLYPH_W; ++col) {
-                if (!((bits >> col) & 1))
-                    continue;
-                for (int dy = 0; dy < SCALE; ++dy) {
-                    for (int dx = 0; dx < SCALE; ++dx) {
-                        SDL_WriteSurfacePixel(surface, cursor_x + col * SCALE + dx, PAD + row * SCALE + dy,
-                            SDL_MapSurfaceRGBA(surface, color.r, color.g, color.b, color.a));
+    // SDL3 has no per-pixel write helper across all versions; lock the
+    // surface and write the RGBA8888 buffer directly.
+    uint32_t *pixels = static_cast<uint32_t *>(SDL_LockSurface(surface));
+    const uint32_t color32 = SDL_MapSurfaceRGBA(surface, color.r, color.g, color.b, color.a);
+    if (pixels) {
+        const int pitch_px = surface->pitch / static_cast<int>(sizeof(uint32_t));
+        int cursor_x = PAD;
+        for (unsigned char c : text) {
+            if (c < 0x20 || c > 0x7e)
+                c = '?';
+            const auto &glyph = FONT5X7[c - 0x20];
+            for (int row = 0; row < GLYPH_H; ++row) {
+                const unsigned char bits = glyph[row];
+                for (int col = 0; col < GLYPH_W; ++col) {
+                    if (!((bits >> col) & 1))
+                        continue;
+                    for (int dy = 0; dy < SCALE; ++dy) {
+                        for (int dx = 0; dx < SCALE; ++dx) {
+                            const int px = cursor_x + col * SCALE + dx;
+                            const int py = PAD + row * SCALE + dy;
+                            pixels[py * pitch_px + px] = color32;
+                        }
                     }
                 }
             }
+            cursor_x += (GLYPH_W + 1) * SCALE;
         }
-        cursor_x += (GLYPH_W + 1) * SCALE;
     }
+    SDL_UnlockSurface(surface);
 
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_DestroySurface(surface);
