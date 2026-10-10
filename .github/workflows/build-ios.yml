@@ -18,10 +18,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Bootstrap upstream (clone + overlay)
-        run: bash Scripts/bootstrap.sh
+        id: bootstrap
+        run: |
+          set -o pipefail
+          bash -x Scripts/bootstrap.sh 2>&1 | tee bootstrap.log
 
       - name: Apply iOS patches
-        run: bash Scripts/apply-patches.sh
+        id: apply
+        run: |
+          set -o pipefail
+          bash -x Scripts/apply-patches.sh 2>&1 | tee apply-patches.log
 
       - name: Build (device)
         id: build
@@ -38,15 +44,17 @@ jobs:
           if-no-files-found: ignore
 
       - name: Push build log to ci-diag branch (readable without auth)
-        if: always() && steps.build.outcome == 'failure'
+        if: always() && (steps.build.outcome == 'failure' || steps.bootstrap.outcome == 'failure' || steps.apply.outcome == 'failure')
         run: |
           set -e
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
           git checkout -B ci-diag origin/ci-diag 2>/dev/null || git checkout -b ci-diag
-          cp -f build-device.log ci-build-device.log
-          git add ci-build-device.log
-          git commit -m "ci: build log $(date -u +%Y%m%dT%H%M%SZ)" || true
+          for f in build-device.log bootstrap.log apply-patches.log; do
+            if [ -f "$f" ]; then cp -f "$f" "ci-$f"; fi
+          done
+          git add -A ci-*.log
+          git commit -m "ci: logs $(date -u +%Y%m%dT%H%M%SZ)" || true
           git push origin ci-diag --force
 
       - name: Package
