@@ -31,6 +31,7 @@ SDK_PATH="$(xcrun --sdk "$SDK_NAME" --show-sdk-path)"
 echo "==> Configuring for iOS ($SDK_NAME / $ARCH) in $BUILD_DIR"
 cmake -S . -B "$BUILD_DIR" -G Ninja \
     -DCMAKE_SYSTEM_NAME=iOS \
+    -DCMAKE_SYSTEM_PROCESSOR="$ARCH" \
     -DCMAKE_OSX_SYSROOT="$SDK_PATH" \
     -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
