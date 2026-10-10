@@ -72,14 +72,18 @@ index 794f836..67bb43d 100644
  	find_package(OpenSSL QUIET)
  endif()
  
-@@ -326,7 +348,10 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -326,7 +348,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
  
  		if (NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" OR NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a")
  			message(STATUS "Building OpenSSL@4...")
 -			if (ARCHITECTURE STREQUAL "x86_64" OR ARCHITECTURE STREQUAL "arm64")
 +			if (IOS)
 +				execute_process(COMMAND perl Configure darwin64-arm64 no-shared no-tests -isysroot ${CMAKE_OSX_SYSROOT} -miphoneos-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
-+				execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
++				execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
++				# FindOpenSSL looks for libssl.a/libcrypto.a under ${ROOT}/lib, but
++				# OpenSSL's make drops them at the source root. Mirror them.
++				file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl/lib")
++				file(COPY "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a" DESTINATION "${CMAKE_BINARY_DIR}/external/openssl/lib")
 +			elseif (ARCHITECTURE STREQUAL "x86_64" OR ARCHITECTURE STREQUAL "arm64")
  				execute_process(COMMAND perl Configure darwin64-${ARCHITECTURE} -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
  				execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
