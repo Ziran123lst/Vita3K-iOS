@@ -1,5 +1,5 @@
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 794f836..c8d18de 100644
+index 794f836..741c63f 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -83,6 +83,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
@@ -92,13 +92,13 @@ index 794f836..c8d18de 100644
  
  		set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/external/openssl")
  		set(OPENSSL_USE_STATIC_LIBS TRUE)
-+		# The earlier QUIET find_package cached NOTFOUND results; force a
-+		# fresh search now that OPENSSL_ROOT_DIR points at the build tree.
-+		unset(OPENSSL_INCLUDE_DIR CACHE)
-+		unset(OPENSSL_SSL_LIBRARY CACHE)
-+		unset(OPENSSL_CRYPTO_LIBRARY CACHE)
-+		unset(OPENSSL_LIBRARIES CACHE)
-+		unset(OPENSSL_FOUND CACHE)
++		# Provide the paths explicitly: FindOpenSSL's own search does not
++		# reliably pick up a freshly cross-compiled tree, so skip it.
++		set(OPENSSL_INCLUDE_DIR "${CMAKE_BINARY_DIR}/external/openssl/include" CACHE FILEPATH "OpenSSL include dir" FORCE)
++		set(OPENSSL_SSL_LIBRARY "${CMAKE_BINARY_DIR}/external/openssl/lib/libssl.a" CACHE FILEPATH "OpenSSL ssl library" FORCE)
++		set(OPENSSL_CRYPTO_LIBRARY "${CMAKE_BINARY_DIR}/external/openssl/lib/libcrypto.a" CACHE FILEPATH "OpenSSL crypto library" FORCE)
++		set(OPENSSL_LIBRARIES "${OPENSSL_SSL_LIBRARY};${OPENSSL_CRYPTO_LIBRARY}" CACHE STRING "OpenSSL libraries" FORCE)
++		set(OPENSSL_FOUND TRUE CACHE BOOL "OpenSSL found" FORCE)
  	endif()
  	find_package(OpenSSL REQUIRED)
  endif()
