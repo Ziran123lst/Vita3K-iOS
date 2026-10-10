@@ -86,11 +86,12 @@ SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Colo
     if (!surface)
         return nullptr;
 
-    // SDL3 has no per-pixel write helper across all versions; lock the
-    // surface and write the RGBA8888 buffer directly.
-    uint32_t *pixels = static_cast<uint32_t *>(SDL_LockSurface(surface));
+    // SDL3 (3.1-era) has no per-pixel write helper and SDL_LockSurface
+    // returns bool; the locked data lives in surface->pixels. Write the
+    // RGBA8888 buffer directly.
     const uint32_t color32 = SDL_MapSurfaceRGBA(surface, color.r, color.g, color.b, color.a);
-    if (pixels) {
+    if (SDL_LockSurface(surface)) {
+        uint32_t *pixels = static_cast<uint32_t *>(surface->pixels);
         const int pitch_px = surface->pitch / static_cast<int>(sizeof(uint32_t));
         int cursor_x = PAD;
         for (unsigned char c : text) {
