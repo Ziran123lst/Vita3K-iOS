@@ -3,7 +3,6 @@ index 794f836..edbd8ad 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -36,6 +36,13 @@ set(CMAKE_FOLDER externals)
- 
  option(BUILD_SHARED_LIBS "Build shared library" OFF)
  option(CAPSTONE_ARCHITECTURE_DEFAULT "Whether architectures are enabled by default" OFF)
  option(CAPSTONE_ARM_SUPPORT "ARM support" ON)
@@ -103,7 +102,7 @@ index 794f836..edbd8ad 100644
  				execute_process(COMMAND perl Configure darwin64-${ARCHITECTURE} -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
  				execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
  			else()
-@@ -347,7 +383,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -347,6 +383,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
  
  		set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/external/openssl")
  		set(OPENSSL_USE_STATIC_LIBS TRUE)
