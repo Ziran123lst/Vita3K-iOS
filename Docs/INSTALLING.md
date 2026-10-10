@@ -2,17 +2,17 @@
 
 ## What you need
 
-- An iPhone or iPad running iOS/iPadOS 13.3 or later (arm64).
+- An iPhone or iPad running iOS/iPadOS 15.0 or later (arm64).
 - A Mac (for initial sideloads) or a PC with AltStore/other sideload tooling.
 - Your own PS Vita firmware dump and game dumps (see the legal note in the
   README).
 
 ## Downloading a build
 
-The CI workflow produces two artifacts per run:
+The CI workflow produces one artifact per run:
 
-- `Vita3K-device` — unsigned `Vita3K.app` for real devices (`iphoneos` SDK).
-- `Vita3K-simulator` — `Vita3K.app` for the iOS Simulator.
+- `Vita3K-device` — unsigned `Vita3K.app` for real devices (`iphoneos` SDK,
+  arm64, iOS 15+).
 
 Download the artifact from the Actions page and unzip it.
 
@@ -60,8 +60,11 @@ devices the entitlement is honored for development-signed binaries.
 
 ## Simulator (no JIT workaround needed)
 
-- Build the `simulator` target and boot the app in the iOS Simulator (arm64
-  Macs; Rosetta/x86_64 is not supported by this build).
+The official MoltenVK iOS release only ships a device (`ios-arm64`) slice, so
+CI builds the device target only. To run in the iOS Simulator you must build
+MoltenVK for the simulator yourself (arm64 Macs only; Rosetta/x86_64 is not
+supported by this build), then build the `simulator` target with
+`Scripts/build-ios.sh simulator`.
 
 ## Getting content in
 

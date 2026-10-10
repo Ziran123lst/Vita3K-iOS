@@ -19,20 +19,23 @@ target_link_libraries(vita3k PRIVATE
     SDL3::SDL3)
 
 # --- Metal rendering: MoltenVK translates the Vulkan API to Metal -----------
+# The MoltenVK iOS release ships only static libraries
+# (static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a) — there is no
+# libMoltenVK.dylib for iOS, and iOS bundles must not embed dynamic libraries
+# anyway. MOLTENVK_DYLIB (named after the macOS variable) therefore points at
+# the static archive for iOS builds.
 if(NOT DEFINED MOLTENVK_DYLIB)
     message(FATAL_ERROR "MOLTENVK_DYLIB was not set. The iOS build must be configured through "
         "the top-level project, which downloads MoltenVK in external/CMakeLists.txt.")
 endif()
 target_include_directories(vita3k PRIVATE "${CMAKE_BINARY_DIR}/external/MoltenVK/include")
-target_sources(vita3k PRIVATE "${MOLTENVK_DYLIB}")
-set_source_files_properties("${MOLTENVK_DYLIB}" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
 target_link_libraries(vita3k PRIVATE "${MOLTENVK_DYLIB}")
-target_link_options(vita3k PRIVATE "-rpath" "@loader_path/Frameworks")
 
 # --- Apple frameworks used by SDL3, MoltenVK, ffmpeg and the shell ----------
 target_link_libraries(vita3k PRIVATE
     "-framework UIKit"
     "-framework Metal"
+    "-framework MetalKit"
     "-framework QuartzCore"
     "-framework CoreGraphics"
     "-framework Foundation"
@@ -43,6 +46,7 @@ target_link_libraries(vita3k PRIVATE
     "-framework CoreMedia"
     "-framework CoreVideo"
     "-framework VideoToolbox"
+    "-framework IOSurface"
     "-framework Security")
 
 set_target_properties(vita3k PROPERTIES

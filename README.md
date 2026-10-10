@@ -17,14 +17,14 @@ patch-based port:
   launcher that lists installed titles and boots them through Vita3K's
   upstream `sdl-frontend`.
 - `Scripts/` — bootstrap, patch, build and package scripts.
-- `.github/workflows/` — CI that cross-compiles unsigned `.app` bundles for
-  device and simulator and uploads them as artifacts.
+- `.github/workflows/` — CI that cross-compiles an unsigned `.app` bundle for
+  device and uploads it as an artifact.
 
 ## Status
 
 | Area | Status |
 | --- | --- |
-| Vulkan → Metal rendering (MoltenVK) | Wired in the build (iOS MoltenVK dylib embedded) |
+| Vulkan → Metal rendering (MoltenVK) | Wired in the build (iOS static libMoltenVK.a) |
 | iOS app shell (SDL3 launcher + `sdl-frontend`) | Implemented in `overlay/` |
 | Dynarmic JIT on-device | Requires a JIT-enabled sideload (see below) |
 | Audio | SDL audio backend only (cubeb disabled on iOS) |
@@ -38,20 +38,22 @@ open, so the actual game-by-game bring-up work can happen in the open.
 ## How rendering reaches Metal
 
 ```
-Vita3K (Vulkan) ──► MoltenVK (libMoltenVK.dylib) ──► Metal ──► A13/A16/M-series GPU
+Vita3K (Vulkan) ──► MoltenVK (libMoltenVK.a) ──► Metal ──► A13/A16/M-series GPU
 ```
 
 - Upstream's default renderer is already `Vulkan`; no code change is needed.
 - `SDL3` on iOS (UIKit driver) creates the Vulkan surface via
   `SDL_Vulkan_GetInstanceExtensions` / `SDL_Vulkan_CreateSurface`, and the
   underlying CAMetalLayer is driven by the OS compositor.
-- `MoltenVK-ios.tar` (v1.4.1) is downloaded during configure and embedded in
-  the bundle, matching how the official macOS build embeds `libMoltenVK.dylib`.
+- `MoltenVK-ios.tar` (v1.4.2) is downloaded during configure and linked
+  statically (`static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a`). The iOS
+  MoltenVK release ships no dynamic library, and iOS bundles must not embed
+  dylibs anyway.
 
 ## Quick start (download a build)
 
 1. Open the **Actions** tab, pick the latest run of the *iOS build* workflow.
-2. Download the `Vita3K-device` artifact (or `Vita3K-simulator`).
+2. Download the `Vita3K-device` artifact.
 3. Sideload per [Docs/INSTALLING.md](Docs/INSTALLING.md) — note the **JIT
    requirement** for real devices.
 
@@ -60,7 +62,7 @@ Vita3K (Vulkan) ──► MoltenVK (libMoltenVK.dylib) ──► Metal ──►
 ```bash
 bash Scripts/bootstrap.sh     # clone pinned upstream + submodules, overlay shell
 bash Scripts/apply-patches.sh # apply Patches/*.patch on top
-bash Scripts/build-ios.sh device     # or: simulator
+bash Scripts/build-ios.sh device     # arm64 device build (iOS 15+)
 bash Scripts/package-ios.sh device   # → dist/Vita3K-iOS-device-unsigned.zip
 ```
 
@@ -83,7 +85,10 @@ you need one of:
   development signing identity — entitlements can then include
   `com.apple.security.cs.allow-jit`.
 
-The simulator does not enforce `W^X` and runs the JIT without extra steps.
+The simulator does not enforce `W^X` and would run the JIT without extra
+steps. Note that the official MoltenVK iOS release only ships a device
+(`ios-arm64`) slice, so this port's CI builds the device target only — a
+simulator build requires compiling MoltenVK for the simulator yourself.
 See [Docs/INSTALLING.md](Docs/INSTALLING.md) for details.
 
 ## Repository layout
@@ -92,7 +97,7 @@ See [Docs/INSTALLING.md](Docs/INSTALLING.md) for details.
 Patches/                       # 0001..0005 iOS adaptation patches (git apply)
 overlay/vita3k/ios/            # iOS app shell (CMake, SDL3 launcher, Info.plist)
 Scripts/                       # bootstrap / apply-patches / build-ios / package-ios
-.github/workflows/build-ios.yml# CI: unsigned .app for device + simulator
+.github/workflows/build-ios.yml# CI: unsigned .app for device (iOS 15+)
 Docs/INSTALLING.md             # sideloading, JIT, entitlements
 LICENSE                        # GPL-2.0 (same as upstream)
 ```

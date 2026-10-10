@@ -13,8 +13,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET="${1:-device}"
 
 case "$TARGET" in
-    device)     SDK="iphoneos";        ARCH="arm64"; BUILD_DIR="$ROOT/build-device" ;;
-    simulator)  SDK="iphonesimulator"; ARCH="arm64"; BUILD_DIR="$ROOT/build-simulator" ;;
+    device)     SDK_NAME="iphoneos";        ARCH="arm64"; BUILD_DIR="$ROOT/build-device" ;;
+    simulator)  SDK_NAME="iphonesimulator"; ARCH="arm64"; BUILD_DIR="$ROOT/build-simulator" ;;
     *) echo "Usage: $0 [device|simulator]" >&2; exit 1 ;;
 esac
 
@@ -22,12 +22,18 @@ JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
 cd "$ROOT/upstream"
 
-echo "==> Configuring for iOS ($SDK / $ARCH) in $BUILD_DIR"
+# Pass the resolved SDK *path* (not the SDK name): the iOS patches pass
+# CMAKE_OSX_SYSROOT straight into compiler flags such as
+# `-isysroot ${CMAKE_OSX_SYSROOT}` (Boost b2 and OpenSSL configure), and clang
+# rejects the bare SDK name.
+SDK_PATH="$(xcrun --sdk "$SDK_NAME" --show-sdk-path)"
+
+echo "==> Configuring for iOS ($SDK_NAME / $ARCH) in $BUILD_DIR"
 cmake -S . -B "$BUILD_DIR" -G Ninja \
     -DCMAKE_SYSTEM_NAME=iOS \
-    -DCMAKE_OSX_SYSROOT="$SDK" \
+    -DCMAKE_OSX_SYSROOT="$SDK_PATH" \
     -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
     -DCMAKE_BUILD_TYPE=Release \
     -DUSE_DISCORD_RICH_PRESENCE=OFF \
     -DARCHITECTURE="$ARCH"

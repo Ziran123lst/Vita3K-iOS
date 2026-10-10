@@ -1,5 +1,5 @@
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 794f836..bcfffc4 100644
+index 794f836..80879d4 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -83,6 +83,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
@@ -29,30 +29,32 @@ index 794f836..bcfffc4 100644
  	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK-macos.tar")
  		message(STATUS "Downloading MoltenVK...")
  		file(DOWNLOAD https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.1/MoltenVK-macos.tar
-@@ -238,6 +242,22 @@ if(APPLE)
+@@ -238,6 +242,24 @@ if(APPLE)
  	endif()
  	target_include_directories(vulkan INTERFACE "${CMAKE_BINARY_DIR}/external/MoltenVK/include")
  	set(MOLTENVK_DYLIB "${CMAKE_BINARY_DIR}/external/MoltenVK/dylib/macOS/libMoltenVK.dylib" PARENT_SCOPE)
 +elseif(IOS)
 +	# iOS has no native Vulkan driver: MoltenVK translates the Vulkan API to
 +	# Metal, which is the only GPU API available on iOS. This is the same
-+	# approach Vita3K uses on macOS.
++	# approach Vita3K uses on macOS. The iOS release ships only a static
++	# xcframework (device arm64), so MOLTENVK_DYLIB points at libMoltenVK.a.
 +	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK-ios.tar")
 +		message(STATUS "Downloading MoltenVK for iOS...")
-+		file(DOWNLOAD https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.1/MoltenVK-ios.tar
++		file(DOWNLOAD https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-ios.tar
 +			"${CMAKE_BINARY_DIR}/external/MoltenVK-ios.tar"
-+			SHOW_PROGRESS)
++			SHOW_PROGRESS
++			EXPECTED_HASH SHA256=b5d947b1660e6e9fed40b9cd2387e160aaab9e80b775c0cef7e14059405178c1)
 +	endif()
 +	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK")
 +		execute_process(COMMAND tar xf "${CMAKE_BINARY_DIR}/external/MoltenVK-ios.tar" --strip-components=1 MoltenVK/MoltenVK
 +			WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external")
 +	endif()
 +	target_include_directories(vulkan INTERFACE "${CMAKE_BINARY_DIR}/external/MoltenVK/include")
-+	set(MOLTENVK_DYLIB "${CMAKE_BINARY_DIR}/external/MoltenVK/dylib/iOS/libMoltenVK.dylib" PARENT_SCOPE)
++	set(MOLTENVK_DYLIB "${CMAKE_BINARY_DIR}/external/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a" PARENT_SCOPE)
  elseif(ANDROID AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
  	# add validation layer
  	if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../android/prebuilt/${ANDROID_ABI}/libVkLayer_khronos_validation.so")
-@@ -272,7 +292,7 @@ if(ANDROID)
+@@ -272,7 +294,7 @@ if(ANDROID)
  endif()
  add_subdirectory(ffmpeg)
  
@@ -61,7 +63,7 @@ index 794f836..bcfffc4 100644
  	execute_process(
  		COMMAND brew --prefix openssl
  		RESULT_VARIABLE BREW_RESULT
-@@ -285,7 +305,7 @@ if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
+@@ -285,7 +307,7 @@ if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
  	endif()
  endif()
  
@@ -70,7 +72,7 @@ index 794f836..bcfffc4 100644
  	find_package(OpenSSL QUIET)
  endif()
  
-@@ -326,7 +346,10 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -326,7 +348,10 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
  
  		if (NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" OR NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a")
  			message(STATUS "Building OpenSSL@4...")

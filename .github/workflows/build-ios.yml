@@ -8,10 +8,6 @@ on:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [device, simulator]
     runs-on: macos-14
     timeout-minutes: 240
     steps:
@@ -24,17 +20,17 @@ jobs:
       - name: Apply iOS patches
         run: bash Scripts/apply-patches.sh
 
-      - name: Build (${{ matrix.target }})
-        run: bash Scripts/build-ios.sh ${{ matrix.target }}
+      - name: Build (device)
+        run: bash Scripts/build-ios.sh device
 
       - name: Package
-        run: bash Scripts/package-ios.sh ${{ matrix.target }}
+        run: bash Scripts/package-ios.sh device
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vita3K-${{ matrix.target }}
+          name: Vita3K-device
           path: |
             dist/
-            build-${{ matrix.target }}/bin/Vita3K.app
+            build-device/bin/Vita3K.app
           if-no-files-found: error
