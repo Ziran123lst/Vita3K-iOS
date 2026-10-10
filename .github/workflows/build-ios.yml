@@ -21,7 +21,7 @@ jobs:
         run: bash Scripts/apply-patches.sh
 
       - name: Build (device)
-        run: bash Scripts/build-ios.sh device
+        run: bash -x Scripts/build-ios.sh device
 
       - name: Package
         run: bash Scripts/package-ios.sh device

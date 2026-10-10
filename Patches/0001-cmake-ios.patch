@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d9edf97..f92d716 100644
+index d9edf97..0237eb9 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -45,7 +45,7 @@ if(ANDROID)
@@ -11,14 +11,15 @@ index d9edf97..f92d716 100644
  		option(USE_DISCORD_RICH_PRESENCE "Build Vita3K with Discord Rich Presence" ON)
  	endif()
  	option(BUILD_APPIMAGE "Build an AppImage." OFF)
-@@ -149,6 +149,13 @@ macro(boost_compile)
+@@ -149,6 +149,14 @@ macro(boost_compile)
  			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
  			OUTPUT_QUIET
  		)
 +	elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
 +		execute_process(
 +			COMMAND ${b2_cmd_line_common} target-os=iphoneos architecture=arm address-model=64
-+				cxxflags="-arch arm64 -isysroot ${CMAKE_OSX_SYSROOT} -miphoneos-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}" stage
++				cxxflags="-arch arm64 -isysroot ${CMAKE_OSX_SYSROOT} -miphoneos-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}"
++				linkflags="-arch arm64 -isysroot ${CMAKE_OSX_SYSROOT} -miphoneos-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}" stage
 +			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
 +			OUTPUT_QUIET
 +		)
