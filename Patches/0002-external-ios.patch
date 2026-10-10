@@ -1,5 +1,5 @@
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 794f836..edbd8ad 100644
+index 794f836..429e866 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -36,6 +36,13 @@ set(CMAKE_FOLDER externals)
@@ -68,16 +68,25 @@ index 794f836..edbd8ad 100644
  elseif(ANDROID AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
  	# add validation layer
  	if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../android/prebuilt/${ANDROID_ABI}/libVkLayer_khronos_validation.so")
-@@ -272,7 +301,7 @@ if(ANDROID)
+@@ -272,7 +301,16 @@ if(ANDROID)
  endif()
  add_subdirectory(ffmpeg)
  
 -if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
++# ffmpeg-core links "-framework AudioUnit" on Apple, but that framework does
++# not exist on iOS (its APIs live in AudioToolbox there). Strip it so the
++# final executable links against the iOS SDK.
++if(IOS)
++	get_target_property(FFMPEG_LINK_LIBS ffmpeg INTERFACE_LINK_LIBRARIES)
++	list(REMOVE_ITEM FFMPEG_LINK_LIBS "-framework AudioUnit")
++	set_target_properties(ffmpeg PROPERTIES INTERFACE_LINK_LIBRARIES "${FFMPEG_LINK_LIBS}")
++endif()
++
 +if((APPLE AND NOT IOS) OR NOT FORCE_BUILD_OPENSSL_MAC)
  	execute_process(
  		COMMAND brew --prefix openssl
  		RESULT_VARIABLE BREW_RESULT
-@@ -285,7 +314,7 @@ if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
+@@ -285,7 +323,7 @@ if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
  	endif()
  endif()
  
@@ -86,7 +95,7 @@ index 794f836..edbd8ad 100644
  	find_package(OpenSSL QUIET)
  endif()
  
-@@ -326,7 +355,14 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -326,7 +364,14 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
  
  		if (NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" OR NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a")
  			message(STATUS "Building OpenSSL@4...")
@@ -102,7 +111,7 @@ index 794f836..edbd8ad 100644
  				execute_process(COMMAND perl Configure darwin64-${ARCHITECTURE} -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
  				execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
  			else()
-@@ -347,6 +383,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -347,6 +392,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
  
  		set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/external/openssl")
  		set(OPENSSL_USE_STATIC_LIBS TRUE)
@@ -116,7 +125,7 @@ index 794f836..edbd8ad 100644
  	endif()
  	find_package(OpenSSL REQUIRED)
  endif()
-@@ -464,7 +507,9 @@ endif()
+@@ -464,7 +516,9 @@ endif()
  # Use XDG desktop portals on Linux
  set(NFD_PORTAL ON)
  
