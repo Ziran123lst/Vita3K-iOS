@@ -9,7 +9,9 @@
 
 add_executable(vita3k MACOSX_BUNDLE
     main_ios.cpp
-    font.h)
+    font.h
+    interface.cpp
+    interface.h)
 
 target_include_directories(vita3k PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -48,6 +50,12 @@ target_link_libraries(vita3k PRIVATE
     "-framework VideoToolbox"
     "-framework IOSurface"
     "-framework Security")
+
+# MoltenVK 1.4.2 references MTLResidencySetDescriptor, a Metal class that only
+# exists since iOS 17.0. Let the linker keep that symbol undefined (MoltenVK
+# guards every use behind @available(iOS 17.0, *) at runtime) so the app keeps
+# its iOS 15.0 deployment target and still links against the iOS 17 SDK.
+target_link_options(vita3k PRIVATE "-Wl,-U,_OBJC_CLASS_$_MTLResidencySetDescriptor")
 
 set_target_properties(vita3k PROPERTIES
     OUTPUT_NAME "Vita3K"
