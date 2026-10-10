@@ -1,5 +1,5 @@
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 794f836..a8ee6ea 100644
+index 794f836..c8d18de 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -83,6 +83,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
@@ -88,3 +88,17 @@ index 794f836..a8ee6ea 100644
  				execute_process(COMMAND perl Configure darwin64-${ARCHITECTURE} -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
  				execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
  			else()
+@@ -347,6 +376,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+ 
+ 		set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/external/openssl")
+ 		set(OPENSSL_USE_STATIC_LIBS TRUE)
++		# The earlier QUIET find_package cached NOTFOUND results; force a
++		# fresh search now that OPENSSL_ROOT_DIR points at the build tree.
++		unset(OPENSSL_INCLUDE_DIR CACHE)
++		unset(OPENSSL_SSL_LIBRARY CACHE)
++		unset(OPENSSL_CRYPTO_LIBRARY CACHE)
++		unset(OPENSSL_LIBRARIES CACHE)
++		unset(OPENSSL_FOUND CACHE)
+ 	endif()
+ 	find_package(OpenSSL REQUIRED)
+ endif()
