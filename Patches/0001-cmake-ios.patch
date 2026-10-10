@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d9edf97..dac7d5f 100644
+index d9edf97..d8df22e 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -45,7 +45,7 @@ if(ANDROID)
@@ -11,7 +11,7 @@ index d9edf97..dac7d5f 100644
  		option(USE_DISCORD_RICH_PRESENCE "Build Vita3K with Discord Rich Presence" ON)
  	endif()
  	option(BUILD_APPIMAGE "Build an AppImage." OFF)
-@@ -149,6 +149,46 @@ macro(boost_compile)
+@@ -149,6 +149,50 @@ macro(boost_compile)
  			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
  			OUTPUT_QUIET
  		)
@@ -29,6 +29,10 @@ index d9edf97..dac7d5f 100644
 +		if(NOT BOOST_STAGE_RESULT EQUAL 0)
 +			file(READ "${BOOST_INSTALLDIR}/b2-stage.log" BOOST_STAGE_LOG)
 +			message(FATAL_ERROR "Boost b2 stage failed (exit ${BOOST_STAGE_RESULT})\n${BOOST_STAGE_LOG}")
++		endif()
++		if(NOT EXISTS "${BOOST_INSTALLDIR}/lib/libboost_filesystem.a")
++			file(READ "${BOOST_INSTALLDIR}/b2-stage.log" BOOST_STAGE_LOG)
++			message(FATAL_ERROR "Boost stage did not produce libboost_filesystem.a\n${BOOST_STAGE_LOG}")
 +		endif()
 +		# CMake >= 3.30 removed the FindBoost module, so the config-mode
 +		# find_package(Boost) below needs a BoostConfig.cmake. ext-boost does
