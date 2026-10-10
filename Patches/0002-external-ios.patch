@@ -1,8 +1,23 @@
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 794f836..5d8225f 100644
+index 794f836..edbd8ad 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
-@@ -83,6 +83,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
+@@ -36,6 +36,13 @@ set(CMAKE_FOLDER externals)
+ 
+ option(BUILD_SHARED_LIBS "Build shared library" OFF)
+ option(CAPSTONE_ARCHITECTURE_DEFAULT "Whether architectures are enabled by default" OFF)
+ option(CAPSTONE_ARM_SUPPORT "ARM support" ON)
++# Capstone overrides CMAKE_OSX_ARCHITECTURES to a universal "x86_64;arm64"
++# list on Apple, which the iOS SDK cannot build (no x86_64 slice). Its
++# CAPSTONE_BUILD_MACOS_THIN option skips that override and keeps the parent
++# arm64-only setting.
++if(IOS)
++	set(CAPSTONE_BUILD_MACOS_THIN ON CACHE BOOL "Build capstone for a single architecture" FORCE)
++endif()
+ add_subdirectory(capstone EXCLUDE_FROM_ALL)
+ 
+ add_library(dirent INTERFACE)
+@@ -83,6 +90,9 @@ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
  add_subdirectory(sdl)
  
  # Cubeb setup, from https://github.com/RPCS3/rpcs3/blob/master/3rdparty/cubeb/CMakeLists.txt
@@ -12,7 +27,7 @@ index 794f836..5d8225f 100644
  set(BUILD_SHARED_LIBS FALSE CACHE BOOL "Don't build shared libs")
  set(BUILD_TESTS FALSE CACHE BOOL "Don't build tests")
  set(BUILD_RUST_LIBS FALSE CACHE BOOL "Don't build rust libs")
-@@ -103,6 +106,7 @@ elseif (ARCHITECTURE STREQUAL "x86_64")
+@@ -103,6 +113,7 @@ elseif (ARCHITECTURE STREQUAL "x86_64")
  		_USE_SSE2
  	)
  endif ()
@@ -20,7 +35,7 @@ index 794f836..5d8225f 100644
  
  if(ANDROID)
  	if(ARCHITECTURE STREQUAL "arm64")
-@@ -224,7 +228,7 @@ target_include_directories(CLI11 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/cli11")
+@@ -224,7 +235,7 @@ target_include_directories(CLI11 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/cli11")
  
  add_library(vulkan INTERFACE)
  target_include_directories(vulkan INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/VulkanMemoryAllocator-Hpp/Vulkan-Headers/include")
@@ -29,7 +44,7 @@ index 794f836..5d8225f 100644
  	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK-macos.tar")
  		message(STATUS "Downloading MoltenVK...")
  		file(DOWNLOAD https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.1/MoltenVK-macos.tar
-@@ -238,6 +242,24 @@ if(APPLE)
+@@ -238,6 +249,24 @@ if(APPLE)
  	endif()
  	target_include_directories(vulkan INTERFACE "${CMAKE_BINARY_DIR}/external/MoltenVK/include")
  	set(MOLTENVK_DYLIB "${CMAKE_BINARY_DIR}/external/MoltenVK/dylib/macOS/libMoltenVK.dylib" PARENT_SCOPE)
@@ -54,7 +69,7 @@ index 794f836..5d8225f 100644
  elseif(ANDROID AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
  	# add validation layer
  	if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../android/prebuilt/${ANDROID_ABI}/libVkLayer_khronos_validation.so")
-@@ -272,7 +294,7 @@ if(ANDROID)
+@@ -272,7 +301,7 @@ if(ANDROID)
  endif()
  add_subdirectory(ffmpeg)
  
@@ -63,7 +78,7 @@ index 794f836..5d8225f 100644
  	execute_process(
  		COMMAND brew --prefix openssl
  		RESULT_VARIABLE BREW_RESULT
-@@ -285,7 +307,7 @@ if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
+@@ -285,7 +314,7 @@ if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
  	endif()
  endif()
  
@@ -72,7 +87,7 @@ index 794f836..5d8225f 100644
  	find_package(OpenSSL QUIET)
  endif()
  
-@@ -326,7 +348,14 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -326,7 +355,14 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
  
  		if (NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libssl.a" OR NOT EXISTS "${CMAKE_BINARY_DIR}/external/openssl/libcrypto.a")
  			message(STATUS "Building OpenSSL@4...")
@@ -88,7 +103,7 @@ index 794f836..5d8225f 100644
  				execute_process(COMMAND perl Configure darwin64-${ARCHITECTURE} -mmacosx-version-min=11 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl")
  				execute_process(COMMAND make -j${CPU_COUNT} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external/openssl" OUTPUT_QUIET)
  			else()
-@@ -347,6 +376,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -347,7 +383,13 @@ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
  
  		set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/external/openssl")
  		set(OPENSSL_USE_STATIC_LIBS TRUE)
@@ -102,7 +117,7 @@ index 794f836..5d8225f 100644
  	endif()
  	find_package(OpenSSL REQUIRED)
  endif()
-@@ -464,7 +500,9 @@ endif()
+@@ -464,7 +507,9 @@ endif()
  # Use XDG desktop portals on Linux
  set(NFD_PORTAL ON)
  
