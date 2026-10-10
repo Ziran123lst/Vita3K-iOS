@@ -1,0 +1,164 @@
+diff --git a/vita3k/config/src/settings.cpp b/vita3k/config/src/settings.cpp
+index c79877b..9096743 100644
+--- a/vita3k/config/src/settings.cpp
++++ b/vita3k/config/src/settings.cpp
+@@ -402,7 +402,7 @@ std::vector<std::pair<std::string, bool>> get_modules_list(
+         }
+ 
+         for (auto &m : modules)
+-            m.second = std::ranges::contains(lle_modules, m.first);
++            m.second = std::find(lle_modules.begin(), lle_modules.end(), m.first) != lle_modules.end();
+ 
+         std::sort(modules.begin(), modules.end(), [](const auto &a, const auto &b) {
+             if (a.second == b.second)
+diff --git a/vita3k/gui-qt/src/settings_dialog.cpp b/vita3k/gui-qt/src/settings_dialog.cpp
+index 8df26c0..a69bb0c 100644
+--- a/vita3k/gui-qt/src/settings_dialog.cpp
++++ b/vita3k/gui-qt/src/settings_dialog.cpp
+@@ -225,7 +225,7 @@ void SettingsDialog::populate_tracy_modules_list() {
+     m_ui->tracy_modules_list->clear();
+     const auto enabled_modules = m_config.tracy_advanced_profiling_modules;
+     for (const auto &name : tracy_module_utils::get_available_module_names()) {
+-        const bool enabled = std::ranges::contains(enabled_modules.begin(), enabled_modules.end(), name);
++        const bool enabled = std::find(enabled_modules.begin(), enabled_modules.end(), name) != enabled_modules.end();
+         auto *item = new QListWidgetItem(QString::fromStdString(name), m_ui->tracy_modules_list);
+         item->setFlags((item->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsSelectable);
+         item->setCheckState(enabled ? Qt::Checked : Qt::Unchecked);
+diff --git a/vita3k/module/src/load_module.cpp b/vita3k/module/src/load_module.cpp
+index b083fd3..80823de 100644
+--- a/vita3k/module/src/load_module.cpp
++++ b/vita3k/module/src/load_module.cpp
+@@ -16,6 +16,7 @@
+ // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ 
+ #include <module/load_module.h>
++#include <algorithm>
+ 
+ #include <config/state.h>
+ #include <emuenv/state.h>
+@@ -169,13 +170,13 @@ bool is_lle_module(SceSysmoduleModuleId module_id, EmuEnvState &emuenv) {
+ 
+     if (have_paths) {
+         if (emuenv.cfg.current_config.modules_mode != ModulesMode::MANUAL) {
+-            if (std::ranges::contains(auto_lle_modules, module_id))
++            if (std::find(auto_lle_modules.begin(), auto_lle_modules.end(), module_id) != auto_lle_modules.end())
+                 return true;
+         }
+ 
+         if (emuenv.cfg.current_config.modules_mode != ModulesMode::AUTOMATIC) {
+             for (auto path : paths) {
+-                if (std::ranges::contains(emuenv.cfg.current_config.lle_modules, path))
++                if (std::find(emuenv.cfg.current_config.lle_modules.begin(), emuenv.cfg.current_config.lle_modules.end(), path) != emuenv.cfg.current_config.lle_modules.end())
+                     return true;
+             }
+         }
+@@ -199,11 +200,11 @@ bool is_lle_module(const std::string &module_name, EmuEnvState &emuenv) {
+     if (auto_lle_module_names.empty())
+         auto_lle_module_names = init_auto_lle_module_names();
+     if (emuenv.cfg.current_config.modules_mode != ModulesMode::AUTOMATIC) {
+-        if (std::ranges::contains(emuenv.cfg.current_config.lle_modules, module_name))
++        if (std::find(emuenv.cfg.current_config.lle_modules.begin(), emuenv.cfg.current_config.lle_modules.end(), module_name) != emuenv.cfg.current_config.lle_modules.end())
+             return true;
+     }
+     if (emuenv.cfg.current_config.modules_mode != ModulesMode::MANUAL) {
+-        if (std::ranges::contains(auto_lle_module_names, module_name))
++        if (std::find(auto_lle_module_names.begin(), auto_lle_module_names.end(), module_name) != auto_lle_module_names.end())
+             return true;
+     }
+     return false;
+diff --git a/vita3k/modules/SceSysmodule/SceSysmodule.cpp b/vita3k/modules/SceSysmodule/SceSysmodule.cpp
+index a7ced6a..adddbc4 100644
+--- a/vita3k/modules/SceSysmodule/SceSysmodule.cpp
++++ b/vita3k/modules/SceSysmodule/SceSysmodule.cpp
+@@ -16,6 +16,7 @@
+ // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ 
+ #include <module/module.h>
++#include <algorithm>
+ 
+ #include <kernel/state.h>
+ #include <module/load_module.h>
+@@ -191,7 +192,7 @@ EXPORT(int, sceSysmoduleIsLoadedInternal, SceSysmoduleInternalModuleId module_id
+         return RET_ERROR(SCE_SYSMODULE_ERROR_INVALID_VALUE);
+ 
+     std::lock_guard<std::mutex> guard(emuenv.kernel.mutex);
+-    if (std::ranges::contains(emuenv.kernel.loaded_internal_sysmodules, module_id))
++    if (std::find(emuenv.kernel.loaded_internal_sysmodules.begin(), emuenv.kernel.loaded_internal_sysmodules.end(), module_id) != emuenv.kernel.loaded_internal_sysmodules.end())
+         return SCE_SYSMODULE_LOADED;
+     else
+         return RET_ERROR(SCE_SYSMODULE_ERROR_UNLOADED);
+diff --git a/vita3k/ngs/src/ngs.cpp b/vita3k/ngs/src/ngs.cpp
+index 1d37129..173b023 100644
+--- a/vita3k/ngs/src/ngs.cpp
++++ b/vita3k/ngs/src/ngs.cpp
+@@ -16,6 +16,7 @@
+ // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ 
+ #include <cpu/functions.h>
++#include <algorithm>
+ #include <kernel/state.h>
+ 
+ #include <ngs/modules/atrac9.h>
+@@ -219,7 +220,7 @@ bool Voice::remove_patch(const MemState &mem, const Ptr<Patch> patch) {
+     const std::lock_guard<std::mutex> guard(*voice_mutex);
+     bool found = false;
+     for (auto &patches_1 : patches) {
+-        if (std::ranges::contains(patches_1, patch)) {
++        if (std::find(patches_1.begin(), patches_1.end(), patch) != patches_1.end()) {
+             found = true;
+             break;
+         }
+diff --git a/vita3k/ngs/src/route.cpp b/vita3k/ngs/src/route.cpp
+index fff2007..7cbe82d 100644
+--- a/vita3k/ngs/src/route.cpp
++++ b/vita3k/ngs/src/route.cpp
+@@ -16,6 +16,7 @@
+ // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ 
+ #include <ngs/system.h>
++#include <algorithm>
+ 
+ #include <util/vector_utils.h>
+ 
+@@ -33,7 +34,7 @@ bool deliver_data(const MemState &mem, const std::vector<Voice *> &voice_queue,
+             continue;
+ 
+         Voice *dest = patch->dest.get(mem);
+-        if (!dest || !std::ranges::contains(voice_queue, dest))
++        if (!dest || !(std::find(voice_queue.begin(), voice_queue.end(), dest) != voice_queue.end()))
+             continue;
+ 
+         const std::lock_guard<std::mutex> guard(*dest->voice_mutex);
+diff --git a/vita3k/util/include/util/vector_utils.h b/vita3k/util/include/util/vector_utils.h
+index e9ca88c..62331db 100644
+--- a/vita3k/util/include/util/vector_utils.h
++++ b/vita3k/util/include/util/vector_utils.h
+@@ -57,7 +57,7 @@ size_t find_index(const T &v, const V &value) {
+ 
+ template <typename T, typename V>
+ bool push_if_not_exists(T &v, const V &value) {
+-    if (!std::ranges::contains(v, value)) {
++    if (!(std::find(v.begin(), v.end(), value) != v.end())) {
+         v.push_back(value);
+         return false;
+     } else {
+diff --git a/vita3k/util/src/tracy.cpp b/vita3k/util/src/tracy.cpp
+index 3919dc4..e542a3c 100644
+--- a/vita3k/util/src/tracy.cpp
++++ b/vita3k/util/src/tracy.cpp
+@@ -17,6 +17,7 @@
+ 
+ #ifdef TRACY_ENABLE
+ #include <util/log.h>
++#include <algorithm>
+ 
+ #include <util/vector_utils.h>
+ 
+@@ -83,7 +84,7 @@ void cleanup(std::vector<std::string> &active_modules_str) {
+     // remove if not found in tracy_available_advanced_profiling_modules
+     std::erase_if(active_modules_str, [](const std::string &module) {
+-        return !std::ranges::contains(get_tracy_available_advanced_profiling_modules(), module);
++        return !(std::find(get_tracy_available_advanced_profiling_modules().begin(), get_tracy_available_advanced_profiling_modules().end(), module) != get_tracy_available_advanced_profiling_modules().end());
+     });
+ }
+ 
