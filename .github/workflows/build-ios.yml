@@ -69,3 +69,20 @@ jobs:
             dist/
             build-device/bin/Vita3K.app
           if-no-files-found: error
+
+      - name: Publish release (main pushes only)
+        if: github.event_name == 'push' && success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-${{ github.run_number }}
+          name: Vita3K-iOS build #${{ github.run_number }}
+          body: |
+            iOS build #${{ github.run_number }} — commit `${{ github.sha }}`
+
+            - Upstream Vita3K **master synced at build time** (see Scripts/bootstrap.sh), then iOS patches applied.
+            - `Vita3K-iOS-device.ipa` — Payload/Vita3K.app, ad-hoc signed inside. **Re-sign** with your own certificate (AltStore / Sideloadly / codesign) before sideloading — iOS requires JIT enabled for Dynarmic (see Docs/INSTALLING.md).
+            - `Vita3K-iOS-device-unsigned.zip` — the raw .app bundle.
+          files: |
+            dist/Vita3K-iOS-device.ipa
+            dist/Vita3K-iOS-device-unsigned.zip
+          fail_on_unmatched_files: true
