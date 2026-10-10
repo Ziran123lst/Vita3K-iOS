@@ -18,7 +18,8 @@ target_include_directories(vita3k PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(vita3k PRIVATE
     app audio compat config ctrl dialog display ime lang gdbstub gxm io miniz modules
     motion packages patch renderer sdl-frontend shader touch util psvpfsparser
-    SDL3::SDL3)
+    SDL3::SDL3
+    pugixml::pugixml)
 
 # --- Metal rendering: MoltenVK translates the Vulkan API to Metal -----------
 # The MoltenVK iOS release ships only static libraries
