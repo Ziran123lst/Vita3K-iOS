@@ -68,3 +68,29 @@ index ab8edff..8320013 100644
  	add_custom_command(
  		OUTPUT Vita3K.icns
  		COMMAND mkdir -p Vita3K.iconset
+diff --git a/vita3k/mem/CMakeLists.txt b/vita3k/mem/CMakeLists.txt
+index 2e2bd28..cfdc922 100644
+--- a/vita3k/mem/CMakeLists.txt
++++ b/vita3k/mem/CMakeLists.txt
+@@ -16,7 +16,7 @@ add_library(
+ target_include_directories(mem PUBLIC include)
+ target_link_libraries(mem PUBLIC util)
+ 
+-if(NOT ANDROID)
++if(NOT ANDROID AND NOT IOS)
+ 	add_executable(
+ 		mem-tests
+ 		tests/allocator_tests.cpp
+diff --git a/vita3k/module/CMakeLists.txt b/vita3k/module/CMakeLists.txt
+index 040421e..654b045 100644
+--- a/vita3k/module/CMakeLists.txt
++++ b/vita3k/module/CMakeLists.txt
+@@ -11,7 +11,7 @@ if(TRACY_ENABLE_ON_CORE_COMPONENTS)
+ 	target_link_libraries(module PUBLIC tracy)
+ endif()
+ 
+-if(NOT ANDROID)
++if(NOT ANDROID AND NOT IOS)
+ 	add_executable(
+ 		module-tests
+ 		tests/arg_layout_tests.cpp
