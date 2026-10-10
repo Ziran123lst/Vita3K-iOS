@@ -21,7 +21,15 @@ jobs:
         run: bash Scripts/apply-patches.sh
 
       - name: Build (device)
-        run: bash -x Scripts/build-ios.sh device
+        run: bash -x Scripts/build-ios.sh device 2>&1 | tee build-device.log
+
+      - name: Upload build log (kept even on failure)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-device-log
+          path: build-device.log
+          if-no-files-found: ignore
 
       - name: Package
         run: bash Scripts/package-ios.sh device
