@@ -53,6 +53,7 @@ jobs:
           for f in build-device.log bootstrap.log apply-patches.log; do
             if [ -f "$f" ]; then cp -f "$f" "ci-$f"; fi
           done
+          if [ -f build-device/external/boost/b2-stage.log ]; then cp -f build-device/external/boost/b2-stage.log ci-b2-stage.log; fi
           git add -A ci-*.log
           git commit -m "ci: logs $(date -u +%Y%m%dT%H%M%SZ)" || true
           git push origin ci-diag --force
