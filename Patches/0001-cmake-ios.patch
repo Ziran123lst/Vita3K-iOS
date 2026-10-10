@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d9edf97..0237eb9 100644
+index d9edf97..3af3960 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -45,7 +45,7 @@ if(ANDROID)
@@ -11,7 +11,7 @@ index d9edf97..0237eb9 100644
  		option(USE_DISCORD_RICH_PRESENCE "Build Vita3K with Discord Rich Presence" ON)
  	endif()
  	option(BUILD_APPIMAGE "Build an AppImage." OFF)
-@@ -149,6 +149,14 @@ macro(boost_compile)
+@@ -149,6 +149,30 @@ macro(boost_compile)
  			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
  			OUTPUT_QUIET
  		)
@@ -22,6 +22,22 @@ index d9edf97..0237eb9 100644
 +				linkflags="-arch arm64 -isysroot ${CMAKE_OSX_SYSROOT} -miphoneos-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}" stage
 +			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
 +			OUTPUT_QUIET
++			RESULT_VARIABLE BOOST_STAGE_RESULT
++		)
++		if(NOT BOOST_STAGE_RESULT EQUAL 0)
++			message(FATAL_ERROR "Boost b2 stage failed (exit ${BOOST_STAGE_RESULT})")
++		endif()
++		# CMake >= 3.30 removed the FindBoost module, so the config-mode
++		# find_package(Boost) below needs a BoostConfig.cmake. ext-boost does
++		# not ship one, so write it by hand pointing at the staged library.
++		file(WRITE "${BOOST_INSTALLDIR}/BoostConfig.cmake"
++			"set(Boost_VERSION 1.89.0)\n"
++			"set(Boost_VERSION_STRING \"1.89.0\")\n"
++			"set(Boost_FOUND TRUE)\n"
++			"set(Boost_INCLUDE_DIRS \"${BOOST_SOURCEDIR}\")\n"
++			"set(Boost_LIBRARY_DIRS \"${BOOST_INSTALLDIR}/lib\")\n"
++			"set(Boost_LIBRARIES \"${BOOST_INSTALLDIR}/lib/libboost_filesystem.a\")\n"
++			"set(Boost_filesystem_FOUND TRUE)\n"
 +		)
  	elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
  		execute_process(
