@@ -1,8 +1,8 @@
 diff --git a/vita3k/app/src/app_init.cpp b/vita3k/app/src/app_init.cpp
-index c5d693d..0124145 100644
+index c5d693d..682ff2e 100644
 --- a/vita3k/app/src/app_init.cpp
 +++ b/vita3k/app/src/app_init.cpp
-@@ -257,6 +257,24 @@ bool init_paths(Root &root_paths) {
+@@ -257,6 +257,25 @@ bool init_paths(Root &root_paths) {
      root_paths.set_shared_path(internal_storage_path);
      root_paths.set_cache_path(internal_storage_path / "cache" / "");
      root_paths.set_patch_path(internal_storage_path / "patch" / "");
@@ -12,10 +12,11 @@ index c5d693d..0124145 100644
 +    // UIFileSharingEnabled is set in Info.plist).
 +    auto sdl_ios_base = SDL_GetBasePath();
 +    auto ios_base_path = fs_utils::utf8_to_path(sdl_ios_base);
-+    SDL_free(sdl_ios_base);
++    // SDL3 returns a const char*, but SDL_free takes void*.
++    SDL_free(const_cast<char *>(sdl_ios_base));
 +    auto sdl_ios_pref = SDL_GetPrefPath(org_name, app_name);
 +    auto ios_pref_path = fs_utils::utf8_to_path(sdl_ios_pref);
-+    SDL_free(sdl_ios_pref);
++    SDL_free(const_cast<char *>(sdl_ios_pref));
 +
 +    root_paths.set_static_assets_path(ios_base_path);
 +    root_paths.set_vita_fs_path(ios_pref_path / "fs" / "");
