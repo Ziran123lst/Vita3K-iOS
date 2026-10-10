@@ -37,7 +37,9 @@ cmake -S . -B "$BUILD_DIR" -G Ninja \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
     -DCMAKE_BUILD_TYPE=Release \
     -DUSE_DISCORD_RICH_PRESENCE=OFF \
-    -DARCHITECTURE="$ARCH"
+    -DARCHITECTURE="$ARCH" \
+    -DCMAKE_C_FLAGS="-D__IPHONEOS__=1" \
+    -DCMAKE_CXX_FLAGS="-D__IPHONEOS__=1"
 
 echo "==> Building (jobs=$JOBS)"
 cmake --build "$BUILD_DIR" -j "$JOBS"
