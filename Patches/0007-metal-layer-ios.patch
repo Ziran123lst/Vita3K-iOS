@@ -1,0 +1,45 @@
+diff --git a/vita3k/renderer/CMakeLists.txt b/vita3k/renderer/CMakeLists.txt
+index 0e40944..247f3ac 100644
+--- a/vita3k/renderer/CMakeLists.txt
++++ b/vita3k/renderer/CMakeLists.txt
+@@ -57,7 +57,12 @@ endif()
+ 
+ if(APPLE)
+ 	target_sources(renderer PRIVATE src/vulkan/metal_layer.mm)
+-	target_link_libraries(renderer PRIVATE "-framework QuartzCore" "-framework Cocoa")
++	# Cocoa only exists on macOS; iOS uses UIKit for the window's UIView.
++	if(IOS)
++		target_link_libraries(renderer PRIVATE "-framework QuartzCore" "-framework UIKit")
++	else()
++		target_link_libraries(renderer PRIVATE "-framework QuartzCore" "-framework Cocoa")
++	endif()
+ endif()
+ 
+ if(X11_FOUND)
+diff --git a/vita3k/renderer/src/vulkan/metal_layer.mm b/vita3k/renderer/src/vulkan/metal_layer.mm
+index 21157a2..1960357 100644
+--- a/vita3k/renderer/src/vulkan/metal_layer.mm
++++ b/vita3k/renderer/src/vulkan/metal_layer.mm
+@@ -15,9 +15,20 @@
+ // with this program; if not, write to the Free Software Foundation, Inc.,
+ // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ 
++#import <TargetConditionals.h>
++#if TARGET_OS_IPHONE
++#import <UIKit/UIKit.h>
++#else
+ #import <Cocoa/Cocoa.h>
++#endif
+ #import <QuartzCore/CAMetalLayer.h>
+ 
+-extern "C" void *get_metal_layer_from_view(void *nsview) {
+-    return (__bridge void *)((__bridge NSView *)nsview).layer;
++extern "C" void *get_metal_layer_from_view(void *view) {
++#if TARGET_OS_IPHONE
++    // iOS: SDL3's Metal window surfaces expose a UIView whose backing layer
++    // is a CAMetalLayer, exactly like the NSView case on macOS.
++    return (__bridge void *)((__bridge UIView *)view).layer;
++#else
++    return (__bridge void *)((__bridge NSView *)view).layer;
++#endif
+ }
