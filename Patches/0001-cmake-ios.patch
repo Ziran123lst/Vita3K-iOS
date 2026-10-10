@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d9edf97..adbd762 100644
+index d9edf97..f385632 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -19,7 +19,13 @@ include("external/dynarmic/CMakeModules/DetectArchitecture.cmake")
@@ -45,9 +45,12 @@ index d9edf97..adbd762 100644
 +			file(READ "${BOOST_INSTALLDIR}/b2-stage.log" BOOST_STAGE_LOG)
 +			message(FATAL_ERROR "Boost b2 stage failed (exit ${BOOST_STAGE_RESULT})\n${BOOST_STAGE_LOG}")
 +		endif()
-+		# Boost.Filesystem has been header-only since Boost 1.84, so b2 stage
-+		# produces no libboost_filesystem.a (only CMake package files). Require
-+		# the CMake package file as the artifact check instead.
++		# Boost.Filesystem remains a compiled library in 1.89: check the staged
++		# archive and the CMake package files that b2 produces.
++		if(NOT EXISTS "${BOOST_INSTALLDIR}/lib/libboost_filesystem.a")
++			file(READ "${BOOST_INSTALLDIR}/b2-stage.log" BOOST_STAGE_LOG)
++			message(FATAL_ERROR "Boost stage did not produce libboost_filesystem.a\n${BOOST_STAGE_LOG}")
++		endif()
 +		if(NOT EXISTS "${BOOST_INSTALLDIR}/lib/cmake/Boost-1.89.0/BoostConfig.cmake")
 +			file(READ "${BOOST_INSTALLDIR}/b2-stage.log" BOOST_STAGE_LOG)
 +			message(FATAL_ERROR "Boost stage did not produce its CMake package files\n${BOOST_STAGE_LOG}")
@@ -61,8 +64,9 @@ index d9edf97..adbd762 100644
 +			"set(Boost_FOUND TRUE)\n"
 +			"set(Boost_INCLUDE_DIRS \"${BOOST_SOURCEDIR}\")\n"
 +			"set(Boost_LIBRARY_DIRS \"${BOOST_INSTALLDIR}/lib\")\n"
-+			# Boost.Filesystem is header-only in 1.89: link nothing.
-+			"set(Boost_LIBRARIES \"\")\n"
++			# Boost.Filesystem remains a compiled library in 1.89: point the
++			# consumers at the staged archive.
++			"set(Boost_LIBRARIES \"${BOOST_INSTALLDIR}/lib/libboost_filesystem.a\")\n"
 +			"set(Boost_filesystem_FOUND TRUE)\n"
 +		)
 +		file(WRITE "${BOOST_INSTALLDIR}/BoostConfigVersion.cmake"
