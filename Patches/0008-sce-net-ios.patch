@@ -1,0 +1,62 @@
+diff --git a/vita3k/modules/CMakeLists.txt b/vita3k/modules/CMakeLists.txt
+index bdc7921..ce6605c 100644
+--- a/vita3k/modules/CMakeLists.txt
++++ b/vita3k/modules/CMakeLists.txt
+@@ -216,7 +216,7 @@ set(SOURCE_LIST
+ 	SceWlanBt/SceWlan.cpp
+ )
+ 
+-if(APPLE)
++if(APPLE AND NOT IOS)
+     list(APPEND SOURCE_LIST
+         SceNet/macos_net_helper.h
+         SceNet/macos_net_helper.cpp
+@@ -230,6 +230,6 @@ target_link_libraries(modules PRIVATE app audio camera codec ctrl dialog lang di
+ target_link_libraries(modules PUBLIC module)
+ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_LIST})
+ 
+-if(APPLE)
++if(APPLE AND NOT IOS)
+     target_link_libraries(modules PUBLIC "-framework SystemConfiguration")
+ endif()
+diff --git a/vita3k/modules/SceNet/SceNet.cpp b/vita3k/modules/SceNet/SceNet.cpp
+index f14623f..fb8c90f 100644
+--- a/vita3k/modules/SceNet/SceNet.cpp
++++ b/vita3k/modules/SceNet/SceNet.cpp
+@@ -28,7 +28,7 @@
+ #include <cstdio>
+ #include <thread>
+ 
+-#ifdef __APPLE__
++#if defined(__APPLE__) && !defined(__IPHONEOS__)
+ #include "macos_net_helper.h"
+ #include <net/if.h>
+ #endif
+@@ -367,7 +367,7 @@ EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
+         };
+         memcpy(addr->data, magicMac, 6);
+     }
+-#elif defined(__APPLE__)
++#elif defined(__APPLE__) && !defined(__IPHONEOS__)
+     char hint[IFNAMSIZ] = {};
+     get_primary_interface_name(hint, sizeof(hint));
+ 
+@@ -382,6 +382,18 @@ EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
+         };
+         memcpy(addr->data, magicMac, 6);
+     }
++#elif defined(__IPHONEOS__)
++    // iOS has no SystemConfiguration-based helper (SCDynamicStore is
++    // macOS-only); report a deterministic locally administered address.
++    uint8_t magicMac[6] = {
++        0x02, // LAA
++        0x49, // 'I'
++        0x4F, // 'O'
++        0x53, // 'S'
++        0x56, // 'V'
++        0x49, // 'I'
++    };
++    memcpy(addr->data, magicMac, 6);
+ #else
+     return UNIMPLEMENTED();
+ #endif
