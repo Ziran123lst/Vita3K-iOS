@@ -10,8 +10,8 @@
 add_executable(vita3k MACOSX_BUNDLE
     main_ios.cpp
     font.h
-    interface.cpp
-    interface.h)
+    ../interface.cpp
+    ../interface.h)
 
 target_include_directories(vita3k PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
