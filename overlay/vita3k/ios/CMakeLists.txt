@@ -9,6 +9,7 @@
 
 add_executable(vita3k MACOSX_BUNDLE
     main_ios.cpp
+    stb_impl.cpp
     font.h
     ../interface.cpp
     ../interface.h)
@@ -19,7 +20,8 @@ target_link_libraries(vita3k PRIVATE
     app audio compat config ctrl dialog display ime lang gdbstub gxm io miniz modules
     motion packages patch renderer sdl-frontend shader touch util psvpfsparser
     SDL3::SDL3
-    pugixml::pugixml)
+    pugixml::pugixml
+    stb)
 
 # --- Metal rendering: MoltenVK translates the Vulkan API to Metal -----------
 # The MoltenVK iOS release ships only static libraries

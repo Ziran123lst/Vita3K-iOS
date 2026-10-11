@@ -15,11 +15,11 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-// The iOS shell is a minimal SDL3 launcher: it lists the installed titles
-// (ux0/app) and boots them through sdl_frontend::run. Rendering inside the
-// game session is Vulkan, which MoltenVK translates to Metal. There is no Qt
-// on iOS, mirroring how the Android port replaces the Qt GUI with a native
-// frontend.
+// The iOS shell is an SDL3 launcher styled after the Vita3K Android app:
+// a dark game library (icon + title + title id per row) with a top app bar.
+// Tapping a row boots the title through sdl_frontend::run; the game session
+// renders with Vulkan, which MoltenVK translates to Metal. There is no Qt
+// on iOS, mirroring how the Android port uses its own frontend.
 //
 // On-device note: Vita3K's only CPU backend is Dynarmic (a JIT recompiler).
 // iOS forbids JIT for App Store apps; a JIT-enabled sideload is therefore
@@ -40,6 +40,8 @@
 #include <util/fs.h>
 #include <util/log.h>
 
+#include <stb_image.h>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
@@ -51,10 +53,19 @@ namespace {
 constexpr int LOGICAL_WIDTH = 960;
 constexpr int LOGICAL_HEIGHT = 544;
 
+// Android-style dark theme palette.
+constexpr SDL_Color COLOR_BG{ 0x0e, 0x10, 0x13, 0xff };
+constexpr SDL_Color COLOR_SURFACE{ 0x1a, 0x1e, 0x27, 0xff };
+constexpr SDL_Color COLOR_SURFACE_HI{ 0x25, 0x2c, 0x3b, 0xff };
+constexpr SDL_Color COLOR_TEXT{ 0xe8, 0xed, 0xf5, 0xff };
+constexpr SDL_Color COLOR_TEXT_DIM{ 0x8b, 0x95, 0xa7, 0xff };
+constexpr SDL_Color COLOR_ACCENT{ 0x4f, 0x8c, 0xff, 0xff };
+
 struct LauncherRow {
     std::string title_id;
     std::string label;
     SDL_FRect rect;
+    SDL_Texture *icon = nullptr;
 };
 
 // The launcher bitmap font only covers ASCII; strip anything else.
@@ -72,23 +83,19 @@ std::string ascii_label(const std::string &text) {
     return out;
 }
 
-// Renders a single line of text (5x7 bitmap font, 2x scale) to a texture.
-SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color) {
+// Renders a single line of text (5x7 bitmap font) to a texture.
+SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, int scale = 2) {
     constexpr int GLYPH_W = 5;
     constexpr int GLYPH_H = 7;
-    constexpr int SCALE = 2;
-    constexpr int PAD = SCALE;
+    constexpr int PAD = 1;
 
-    const int w = static_cast<int>(text.size()) * (GLYPH_W + 1) * SCALE + PAD * 2;
-    const int h = GLYPH_H * SCALE + PAD * 2;
+    const int w = static_cast<int>(text.size()) * (GLYPH_W + 1) * scale + PAD * 2;
+    const int h = GLYPH_H * scale + PAD * 2;
 
     SDL_Surface *surface = SDL_CreateSurface(w, h, SDL_PIXELFORMAT_RGBA8888);
     if (!surface)
         return nullptr;
 
-    // SDL3 (3.1-era) has no per-pixel write helper and SDL_LockSurface
-    // returns bool; the locked data lives in surface->pixels. Write the
-    // RGBA8888 buffer directly.
     const uint32_t color32 = SDL_MapSurfaceRGBA(surface, color.r, color.g, color.b, color.a);
     if (SDL_LockSurface(surface)) {
         uint32_t *pixels = static_cast<uint32_t *>(surface->pixels);
@@ -103,16 +110,16 @@ SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Colo
                 for (int col = 0; col < GLYPH_W; ++col) {
                     if (!((bits >> col) & 1))
                         continue;
-                    for (int dy = 0; dy < SCALE; ++dy) {
-                        for (int dx = 0; dx < SCALE; ++dx) {
-                            const int px = cursor_x + col * SCALE + dx;
-                            const int py = PAD + row * SCALE + dy;
+                    for (int dy = 0; dy < scale; ++dy) {
+                        for (int dx = 0; dx < scale; ++dx) {
+                            const int px = cursor_x + col * scale + dx;
+                            const int py = PAD + row * scale + dy;
                             pixels[py * pitch_px + px] = color32;
                         }
                     }
                 }
             }
-            cursor_x += (GLYPH_W + 1) * SCALE;
+            cursor_x += (GLYPH_W + 1) * scale;
         }
     }
     SDL_UnlockSurface(surface);
@@ -122,8 +129,8 @@ SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Colo
     return texture;
 }
 
-void draw_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, float x, float y) {
-    SDL_Texture *texture = make_text(renderer, text, color);
+void draw_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, float x, float y, int scale = 2) {
+    SDL_Texture *texture = make_text(renderer, text, color, scale);
     if (!texture)
         return;
     float w = 0.f;
@@ -132,6 +139,57 @@ void draw_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color,
     SDL_FRect dst{ x, y, w, h };
     SDL_RenderTexture(renderer, texture, nullptr, &dst);
     SDL_DestroyTexture(texture);
+}
+
+void fill_rect(SDL_Renderer *renderer, SDL_Color color, float x, float y, float w, float h) {
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_FRect rect{ x, y, w, h };
+    SDL_RenderFillRect(renderer, &rect);
+}
+
+// Loads a PNG icon (stb_image) into a texture; returns nullptr on failure.
+SDL_Texture *load_icon(SDL_Renderer *renderer, const std::string &path) {
+    int w = 0;
+    int h = 0;
+    int comp = 0;
+    unsigned char *pixels = stbi_load(path.c_str(), &w, &h, &comp, 4);
+    if (!pixels || w <= 0 || h <= 0)
+        return nullptr;
+
+    SDL_Surface *surface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA8888, pixels, w * 4);
+    stbi_image_free(pixels);
+    if (!surface)
+        return nullptr;
+
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_DestroySurface(surface);
+    return texture;
+}
+
+// Draws a rounded-ish row card: surface fill, icon, title, title id.
+void draw_row(SDL_Renderer *renderer, const LauncherRow &row) {
+    const SDL_Color fill = COLOR_SURFACE_HI;
+    fill_rect(renderer, fill, row.rect.x, row.rect.y, row.rect.w, row.rect.h);
+
+    const float icon_x = row.rect.x + 14.f;
+    const float icon_y = row.rect.y + 8.f;
+    constexpr float ICON_SIZE = 56.f;
+    if (row.icon) {
+        SDL_FRect dst{ icon_x, icon_y, ICON_SIZE, ICON_SIZE };
+        SDL_RenderTexture(renderer, row.icon, nullptr, &dst);
+    } else {
+        fill_rect(renderer, COLOR_ACCENT, icon_x, icon_y, ICON_SIZE, ICON_SIZE);
+    }
+
+    draw_text(renderer, row.label, COLOR_TEXT, row.rect.x + 84.f, row.rect.y + 12.f, 2);
+    draw_text(renderer, row.title_id, COLOR_TEXT_DIM, row.rect.x + 84.f, row.rect.y + 40.f, 2);
+}
+
+void destroy_rows(std::vector<LauncherRow> &rows) {
+    for (auto &row : rows) {
+        SDL_DestroyTexture(row.icon);
+        row.icon = nullptr;
+    }
 }
 
 int run_launcher(EmuEnvState &emuenv, app::AppSessionController &session) {
@@ -164,11 +222,13 @@ int run_launcher(EmuEnvState &emuenv, app::AppSessionController &session) {
                 continue;
             LauncherRow row;
             row.title_id = entry.title_id;
-            row.label = entry.title_id + "   " + ascii_label(entry.title);
+            row.label = ascii_label(entry.title);
+            if (row.label.empty())
+                row.label = entry.title_id;
+            row.rect = SDL_FRect{ 12.f, 56.f + static_cast<float>(rows.size()) * 76.f, 936.f, 72.f };
+            if (!entry.icon_path.empty())
+                row.icon = load_icon(renderer, entry.icon_path);
             rows.push_back(std::move(row));
-        }
-        for (std::size_t i = 0; i < rows.size(); ++i) {
-            rows[i].rect = SDL_FRect{ 24.f, 84.f + static_cast<float>(i) * 46.f, LOGICAL_WIDTH - 48.f, 40.f };
         }
 
         std::string selected;
@@ -199,33 +259,35 @@ int run_launcher(EmuEnvState &emuenv, app::AppSessionController &session) {
                 }
             }
 
-            SDL_SetRenderDrawColor(renderer, 0x10, 0x12, 0x1a, 0xff);
-            SDL_RenderClear(renderer);
+            // Background.
+            fill_rect(renderer, COLOR_BG, 0.f, 0.f, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
-            draw_text(renderer, "Vita3K for iOS", SDL_Color{ 235, 240, 250, 255 }, 24.f, 24.f);
-            draw_text(renderer, "Vulkan rendered on Metal via MoltenVK", SDL_Color{ 130, 140, 160, 255 }, 24.f, 50.f);
+            // Top app bar.
+            fill_rect(renderer, COLOR_SURFACE, 0.f, 0.f, LOGICAL_WIDTH, 52.f);
+            draw_text(renderer, "Vita3K", COLOR_TEXT, 16.f, 14.f, 3);
+            draw_text(renderer, "iOS port", COLOR_TEXT_DIM, 900.f, 24.f, 2);
 
             if (rows.empty()) {
-                draw_text(renderer, "No games found.", SDL_Color{ 200, 205, 215, 255 }, 24.f, 96.f);
-                draw_text(renderer, "Copy a game folder into:", SDL_Color{ 130, 140, 160, 255 }, 24.f, 122.f);
-                draw_text(renderer, "Files app -> Vita3K -> Documents -> ux0/app/<TITLEID>/", SDL_Color{ 130, 140, 160, 255 }, 24.f, 146.f);
+                // Empty library, Android-app style centred hint.
+                draw_text(renderer, "No games found", COLOR_TEXT, 320.f, 200.f, 3);
+                draw_text(renderer, "Copy a game folder into:", COLOR_TEXT_DIM, 330.f, 244.f, 2);
+                draw_text(renderer, "Files app -> Vita3K -> Documents -> ux0/app/<TITLEID>/",
+                    COLOR_TEXT_DIM, 260.f, 272.f, 2);
             } else {
-                for (const auto &row : rows) {
-                    SDL_SetRenderDrawColor(renderer, 0x1c, 0x20, 0x2e, 0xff);
-                    SDL_RenderFillRect(renderer, &row.rect);
-                    draw_text(renderer, row.label, SDL_Color{ 205, 210, 222, 255 }, row.rect.x + 10.f, row.rect.y + 8.f);
-                }
+                for (const auto &row : rows)
+                    draw_row(renderer, row);
             }
 
-            draw_text(renderer, "Tap a title to boot. Use a physical controller (MFi / PS / Xbox) for buttons.",
-                SDL_Color{ 110, 118, 134, 255 }, 24.f, LOGICAL_HEIGHT - 60.f);
-            draw_text(renderer, "On-device Dynarmic JIT requires a JIT-enabled sideload (see Docs/INSTALLING.md).",
-                SDL_Color{ 110, 118, 134, 255 }, 24.f, LOGICAL_HEIGHT - 34.f);
+            draw_text(renderer, "Tap a title to boot. Physical controller (MFi / PS / Xbox) for buttons.",
+                COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 48.f, 2);
+            draw_text(renderer, "Dynarmic JIT needs a JIT-enabled sideload (Docs/INSTALLING.md).",
+                COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 22.f, 2);
 
             SDL_RenderPresent(renderer);
             SDL_Delay(16);
         }
 
+        destroy_rows(rows);
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
 
