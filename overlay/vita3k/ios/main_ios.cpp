@@ -251,6 +251,13 @@ int run_launcher(EmuEnvState &emuenv, app::AppSessionController &session) {
 // SDL3 entry point. SDL3 provides the UIKit application lifecycle; this runs
 // on the main thread once the app is up.
 int SDL_main(int argc, char *argv[]) {
+    // Lock the app to landscape on real devices. The Info.plist already
+    // declares landscape-only orientations, but SDL3's UIKit backend drives
+    // the view orientation from this hint; without it a portrait-held device
+    // rotates the 960x544 frame by 90 degrees and touch coordinates no longer
+    // match the UI.
+    SDL_SetHint("SDL_HINT_ORIENTATIONS", "LandscapeLeft,LandscapeRight");
+
     Root root_paths;
     const bool portable = app::init_paths(root_paths);
 
