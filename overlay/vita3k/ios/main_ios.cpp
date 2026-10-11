@@ -42,6 +42,10 @@
 
 #include <stb_image.h>
 
+#include <stb_image.h>
+#define STB_TRUETYPE_IMPLEMENTATION
+#include <stb_truetype.h>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
@@ -61,6 +65,57 @@ constexpr SDL_Color COLOR_TEXT{ 0xe8, 0xed, 0xf5, 0xff };
 constexpr SDL_Color COLOR_TEXT_DIM{ 0x8b, 0x95, 0xa7, 0xff };
 constexpr SDL_Color COLOR_ACCENT{ 0x4f, 0x8c, 0xff, 0xff };
 
+// --- Unicode text rendering -----------------------------------------------
+// The 5x7 bitmap font only covers ASCII, which is why CJK game titles showed
+// up as garbage. Render all text (ASCII + CJK) with stb_truetype from the
+// bundled DroidSansFallbackFull.ttf instead.
+
+static stbtt_fontinfo g_font;
+static unsigned char *g_font_data = nullptr;
+static bool g_font_ready = false;
+
+// Loads fonts/DroidSansFallbackFull.ttf from the bundle (SDL_GetBasePath).
+bool init_shell_font() {
+    if (g_font_ready)
+        return true;
+    const char *base = SDL_GetBasePath();
+    if (!base)
+        return false;
+    const std::string path = std::string(base) + "fonts/DroidSansFallbackFull.ttf";
+    size_t size = 0;
+    g_font_data = static_cast<unsigned char *>(SDL_LoadFile(path.c_str(), &size));
+    if (!g_font_data || size == 0)
+        return false;
+    if (!stbtt_InitFont(&g_font, g_font_data, 0))
+        return false;
+    g_font_ready = true;
+    return true;
+}
+
+// Decodes one UTF-8 codepoint; advances p by *adv bytes.
+int utf8_next(const char *s, int &adv) {
+    const unsigned char c = static_cast<unsigned char>(s[0]);
+    if (c < 0x80) {
+        adv = 1;
+        return c;
+    }
+    if ((c & 0xe0) == 0xc0) {
+        adv = 2;
+        return ((c & 0x1f) << 6) | (static_cast<unsigned char>(s[1]) & 0x3f);
+    }
+    if ((c & 0xf0) == 0xe0) {
+        adv = 3;
+        return ((c & 0x0f) << 12) | ((static_cast<unsigned char>(s[1]) & 0x3f) << 6) | (static_cast<unsigned char>(s[2]) & 0x3f);
+    }
+    if ((c & 0xf8) == 0xf0) {
+        adv = 4;
+        return ((c & 0x07) << 18) | ((static_cast<unsigned char>(s[1]) & 0x3f) << 12)
+            | ((static_cast<unsigned char>(s[2]) & 0x3f) << 6) | (static_cast<unsigned char>(s[3]) & 0x3f);
+    }
+    adv = 1;
+    return '?';
+}
+
 struct LauncherRow {
     std::string title_id;
     std::string label;
@@ -68,29 +123,35 @@ struct LauncherRow {
     SDL_Texture *icon = nullptr;
 };
 
-// The launcher bitmap font only covers ASCII; strip anything else.
-std::string ascii_label(const std::string &text) {
-    std::string out;
-    out.reserve(text.size());
-    for (char c : text) {
-        const unsigned char u = static_cast<unsigned char>(c);
-        if (u >= 0x20 && u < 0x7f) {
-            out.push_back(static_cast<char>(u));
-        } else if (u == '\t' || u == '\n' || u == '\r') {
-            out.push_back(' ');
-        }
+// Renders a single line of text (stb_truetype, pixel_h font height) to a
+// texture. Supports ASCII and CJK via DroidSansFallbackFull.
+SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, int pixel_h) {
+    if (!g_font_ready)
+        return nullptr;
+
+    const float scale = stbtt_ScaleForPixelHeight(&g_font, static_cast<float>(pixel_h));
+    int asc = 0;
+    int desc = 0;
+    int lgap = 0;
+    stbtt_GetFontVMetrics(&g_font, &asc, &desc, &lgap);
+    const float line_h = static_cast<float>(asc - desc) * scale;
+
+    // Measure.
+    float width = 0.f;
+    for (const char *p = text.c_str(); *p;) {
+        int adv = 0;
+        const int cp = utf8_next(p, adv);
+        int idx = stbtt_FindGlyphIndex(&g_font, cp);
+        if (!idx)
+            idx = stbtt_FindGlyphIndex(&g_font, '?');
+        int adv_w = 0;
+        int lsb = 0;
+        stbtt_GetGlyphHMetrics(&g_font, idx, &adv_w, &lsb);
+        width += adv_w * scale;
+        p += adv;
     }
-    return out;
-}
-
-// Renders a single line of text (5x7 bitmap font) to a texture.
-SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, int scale = 2) {
-    constexpr int GLYPH_W = 5;
-    constexpr int GLYPH_H = 7;
-    constexpr int PAD = 1;
-
-    const int w = static_cast<int>(text.size()) * (GLYPH_W + 1) * scale + PAD * 2;
-    const int h = GLYPH_H * scale + PAD * 2;
+    const int w = static_cast<int>(width) + 2;
+    const int h = static_cast<int>(line_h) + 2;
 
     SDL_Surface *surface = SDL_CreateSurface(w, h, SDL_PIXELFORMAT_RGBA8888);
     if (!surface)
@@ -100,26 +161,37 @@ SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Colo
     if (SDL_LockSurface(surface)) {
         uint32_t *pixels = static_cast<uint32_t *>(surface->pixels);
         const int pitch_px = surface->pitch / static_cast<int>(sizeof(uint32_t));
-        int cursor_x = PAD;
-        for (unsigned char c : text) {
-            if (c < 0x20 || c > 0x7e)
-                c = '?';
-            const auto &glyph = FONT5X7[c - 0x20];
-            for (int row = 0; row < GLYPH_H; ++row) {
-                const unsigned char bits = glyph[row];
-                for (int col = 0; col < GLYPH_W; ++col) {
-                    if (!((bits >> col) & 1))
-                        continue;
-                    for (int dy = 0; dy < scale; ++dy) {
-                        for (int dx = 0; dx < scale; ++dx) {
-                            const int px = cursor_x + col * scale + dx;
-                            const int py = PAD + row * scale + dy;
+        const int base_y = static_cast<int>(asc * scale);
+        float cx = 0.f;
+        for (const char *p = text.c_str(); *p;) {
+            int adv = 0;
+            const int cp = utf8_next(p, adv);
+            int idx = stbtt_FindGlyphIndex(&g_font, cp);
+            if (!idx)
+                idx = stbtt_FindGlyphIndex(&g_font, '?');
+            int adv_w = 0;
+            int lsb = 0;
+            stbtt_GetGlyphHMetrics(&g_font, idx, &adv_w, &lsb);
+            int bw = 0;
+            int bh = 0;
+            int bxoff = 0;
+            int byoff = 0;
+            unsigned char *bm = stbtt_GetGlyphBitmap(&g_font, scale, scale, idx, &bw, &bh, &bxoff, &byoff);
+            if (bm) {
+                for (int row = 0; row < bh; ++row) {
+                    for (int col = 0; col < bw; ++col) {
+                        if (bm[row * bw + col] == 0)
+                            continue;
+                        const int px = static_cast<int>(cx) + bxoff + col + 1;
+                        const int py = base_y + byoff + row + 1;
+                        if (px >= 0 && px < w && py >= 0 && py < h)
                             pixels[py * pitch_px + px] = color32;
-                        }
                     }
                 }
+                stbtt_FreeBitmap(bm, nullptr);
             }
-            cursor_x += (GLYPH_W + 1) * scale;
+            cx += adv_w * scale;
+            p += adv;
         }
     }
     SDL_UnlockSurface(surface);
@@ -129,8 +201,8 @@ SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Colo
     return texture;
 }
 
-void draw_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, float x, float y, int scale = 2) {
-    SDL_Texture *texture = make_text(renderer, text, color, scale);
+void draw_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, float x, float y, int pixel_h) {
+    SDL_Texture *texture = make_text(renderer, text, color, pixel_h);
     if (!texture)
         return;
     float w = 0.f;
@@ -181,8 +253,8 @@ void draw_row(SDL_Renderer *renderer, const LauncherRow &row) {
         fill_rect(renderer, COLOR_ACCENT, icon_x, icon_y, ICON_SIZE, ICON_SIZE);
     }
 
-    draw_text(renderer, row.label, COLOR_TEXT, row.rect.x + 84.f, row.rect.y + 12.f, 2);
-    draw_text(renderer, row.title_id, COLOR_TEXT_DIM, row.rect.x + 84.f, row.rect.y + 40.f, 2);
+    draw_text(renderer, row.label, COLOR_TEXT, row.rect.x + 84.f, row.rect.y + 8.f, 15);
+    draw_text(renderer, row.title_id, COLOR_TEXT_DIM, row.rect.x + 84.f, row.rect.y + 34.f, 12);
 }
 
 void destroy_rows(std::vector<LauncherRow> &rows) {
@@ -222,7 +294,7 @@ int run_launcher(EmuEnvState &emuenv, app::AppSessionController &session) {
                 continue;
             LauncherRow row;
             row.title_id = entry.title_id;
-            row.label = ascii_label(entry.title);
+            row.label = entry.title;
             if (row.label.empty())
                 row.label = entry.title_id;
             row.rect = SDL_FRect{ 12.f, 56.f + static_cast<float>(rows.size()) * 76.f, 936.f, 72.f };
@@ -264,24 +336,24 @@ int run_launcher(EmuEnvState &emuenv, app::AppSessionController &session) {
 
             // Top app bar.
             fill_rect(renderer, COLOR_SURFACE, 0.f, 0.f, LOGICAL_WIDTH, 52.f);
-            draw_text(renderer, "Vita3K", COLOR_TEXT, 16.f, 14.f, 3);
-            draw_text(renderer, "iOS port", COLOR_TEXT_DIM, 900.f, 24.f, 2);
+            draw_text(renderer, "Vita3K", COLOR_TEXT, 16.f, 13.f, 24);
+            draw_text(renderer, "iOS port", COLOR_TEXT_DIM, 860.f, 20.f, 13);
 
             if (rows.empty()) {
                 // Empty library, Android-app style centred hint.
-                draw_text(renderer, "No games found", COLOR_TEXT, 320.f, 200.f, 3);
-                draw_text(renderer, "Copy a game folder into:", COLOR_TEXT_DIM, 330.f, 244.f, 2);
+                draw_text(renderer, "No games found", COLOR_TEXT, 320.f, 196.f, 22);
+                draw_text(renderer, "Copy a game folder into:", COLOR_TEXT_DIM, 330.f, 234.f, 13);
                 draw_text(renderer, "Files app -> Vita3K -> Documents -> ux0/app/<TITLEID>/",
-                    COLOR_TEXT_DIM, 260.f, 272.f, 2);
+                    COLOR_TEXT_DIM, 240.f, 256.f, 12);
             } else {
                 for (const auto &row : rows)
                     draw_row(renderer, row);
             }
 
             draw_text(renderer, "Tap a title to boot. Physical controller (MFi / PS / Xbox) for buttons.",
-                COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 48.f, 2);
+                COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 48.f, 11);
             draw_text(renderer, "Dynarmic JIT needs a JIT-enabled sideload (Docs/INSTALLING.md).",
-                COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 22.f, 2);
+                COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 30.f, 11);
 
             SDL_RenderPresent(renderer);
             SDL_Delay(16);
@@ -325,6 +397,9 @@ int SDL_main(int argc, char *argv[]) {
 
     if (logging::init(root_paths, true) != Success)
         return InitConfigFailed;
+
+    if (!init_shell_font())
+        LOG_WARN("Launcher font (DroidSansFallbackFull.ttf) not loaded; text will be missing");
 
     Config cfg{};
     EmuEnvState emuenv;
