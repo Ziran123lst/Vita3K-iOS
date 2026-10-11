@@ -9,7 +9,6 @@
 
 add_executable(vita3k MACOSX_BUNDLE
     main_ios.cpp
-    stb_impl.cpp
     font.h
     ../interface.cpp
     ../interface.h)
