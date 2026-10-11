@@ -41,9 +41,9 @@
 #include <util/log.h>
 
 #include <stb_image.h>
-
-#include <stb_image.h>
-#define STB_TRUETYPE_IMPLEMENTATION
+// stb_truetype symbols (STB_TRUETYPE_IMPLEMENTATION) are provided by
+// vita3k/overlay/font.cpp which is linked into liboverlay.a; only the header
+// is needed here.
 #include <stb_truetype.h>
 
 #include <SDL3/SDL.h>
