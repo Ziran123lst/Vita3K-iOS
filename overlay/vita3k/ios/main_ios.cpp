@@ -439,7 +439,7 @@ int SDL_main(int argc, char *argv[]) {
     emulator_items.push_back({ "CPU Mode", "JIT (Dynarmic)" });
     emulator_items.push_back({ "Allow JIT", "Enabled (sideload required)" });
 
-    std::vector<PkgEntry> pkgs = scan_pkgs();
+    auto pkgs = scan_pkgs();
     PkgInstallState pkg_state;
 
     bool quit = false;
