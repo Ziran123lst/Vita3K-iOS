@@ -3,12 +3,10 @@ index 5850f09..cef1bd4 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -19,7 +19,11 @@ include("external/dynarmic/CMakeModules/DetectArchitecture.cmake")
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+ set(CMAKE_CXX_STANDARD 23)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ set(CMAKE_CXX_EXTENSIONS OFF)
 -set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3)
-+# iOS requires at least 14.0 for std::atomic wait/notify and we target 15.0
-+# (matches the minimum of the pinned MoltenVK static library).
 +if(IOS)
 +	set(CMAKE_OSX_DEPLOYMENT_TARGET 15.0)
 +else()
@@ -25,13 +23,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 +	if(((ARCHITECTURE STREQUAL "x86_64") OR APPLE) AND NOT IOS)
  		option(USE_DISCORD_RICH_PRESENCE "Build Vita3K with Discord Rich Presence" ON)
  	endif()
- 	option(BUILD_APPIMAGE "Build an AppImage." OFF)
-@@ -149,6 +153,62 @@ macro(boost_compile)
+ endif()
+@@ -148,6 +152,61 @@ macro(boost_compile)
  			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
  			OUTPUT_QUIET
  		)
 +	elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-+		file(MAKE_DIRECTORY "${BOOST_INSTALLDIR}")
 +		execute_process(
 +			COMMAND ${b2_cmd_line_common} target-os=iphone architecture=arm address-model=64
 +				cxxflags="-arch arm64 -isysroot ${CMAKE_OSX_SYSROOT} -miphoneos-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}"
