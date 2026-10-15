@@ -15,16 +15,15 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-// The iOS shell is an SDL3 launcher styled after the Vita3K Android app:
-// a dark game library (icon + title + title id per row) with a top app bar.
-// Tapping a row boots the title through sdl_frontend::run; the game session
-// renders with Vulkan, which MoltenVK translates to Metal. There is no Qt
-// on iOS, mirroring how the Android port uses its own frontend.
+// iOS shell: an SDL3 frontend that mirrors the Vita3K Android app layout —
+// a game library, a Settings screen (Controls / Interface / Emulator tabs with
+// toggle rows) and an "Install PKG" screen that scans the app Documents folder
+// and installs .pkg files through packages::install_pkg. Text is rendered with
+// stb_truetype (DroidSansFallbackFull.ttf) so CJK titles display correctly.
+// Game sessions render with Vulkan, translated to Metal by MoltenVK.
 //
-// On-device note: Vita3K's only CPU backend is Dynarmic (a JIT recompiler).
-// iOS forbids JIT for App Store apps; a JIT-enabled sideload is therefore
-// required on real devices (see Docs/INSTALLING.md). The simulator is not
-// affected.
+// On-device note: Dynarmic is a JIT recompiler; iOS forbids JIT for App Store
+// apps, so a JIT-enabled sideload is required on real devices.
 
 #include "font.h"
 
@@ -35,6 +34,7 @@
 #include <emuenv/state.h>
 #include <io/state.h>
 #include <modules/module_parent.h>
+#include <packages/pkg.h>
 #include <sdl-frontend/session.h>
 #include <util/exit_code.h>
 #include <util/fs.h>
@@ -49,6 +49,13 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <algorithm>
+#include <array>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -56,6 +63,9 @@ namespace {
 
 constexpr int LOGICAL_WIDTH = 960;
 constexpr int LOGICAL_HEIGHT = 544;
+constexpr int APPBAR_H = 52;
+constexpr int ROW_H = 72;
+constexpr int ROW_GAP = 4;
 
 // Android-style dark theme palette.
 constexpr SDL_Color COLOR_BG{ 0x0e, 0x10, 0x13, 0xff };
@@ -64,17 +74,17 @@ constexpr SDL_Color COLOR_SURFACE_HI{ 0x25, 0x2c, 0x3b, 0xff };
 constexpr SDL_Color COLOR_TEXT{ 0xe8, 0xed, 0xf5, 0xff };
 constexpr SDL_Color COLOR_TEXT_DIM{ 0x8b, 0x95, 0xa7, 0xff };
 constexpr SDL_Color COLOR_ACCENT{ 0x4f, 0x8c, 0xff, 0xff };
+constexpr SDL_Color COLOR_TOGGLE_ON{ 0x3a, 0x63, 0xa8, 0xff };
+constexpr SDL_Color COLOR_TOGGLE_OFF{ 0x3a, 0x3f, 0x4c, 0xff };
+constexpr SDL_Color COLOR_TAB_ON{ 0xff, 0x9f, 0x0a, 0xff }; // Android accent orange
+constexpr SDL_Color COLOR_ERROR{ 0xff, 0x6b, 0x6b, 0xff };
 
 // --- Unicode text rendering -----------------------------------------------
-// The 5x7 bitmap font only covers ASCII, which is why CJK game titles showed
-// up as garbage. Render all text (ASCII + CJK) with stb_truetype from the
-// bundled DroidSansFallbackFull.ttf instead.
 
 static stbtt_fontinfo g_font;
 static unsigned char *g_font_data = nullptr;
 static bool g_font_ready = false;
 
-// Loads fonts/DroidSansFallbackFull.ttf from the bundle (SDL_GetBasePath).
 bool init_shell_font() {
     if (g_font_ready)
         return true;
@@ -92,7 +102,6 @@ bool init_shell_font() {
     return true;
 }
 
-// Decodes one UTF-8 codepoint; advances p by *adv bytes.
 int utf8_next(const char *s, int &adv) {
     const unsigned char c = static_cast<unsigned char>(s[0]);
     if (c < 0x80) {
@@ -116,19 +125,9 @@ int utf8_next(const char *s, int &adv) {
     return '?';
 }
 
-struct LauncherRow {
-    std::string title_id;
-    std::string label;
-    SDL_FRect rect;
-    SDL_Texture *icon = nullptr;
-};
-
-// Renders a single line of text (stb_truetype, pixel_h font height) to a
-// texture. Supports ASCII and CJK via DroidSansFallbackFull.
 SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, int pixel_h) {
     if (!g_font_ready)
         return nullptr;
-
     const float scale = stbtt_ScaleForPixelHeight(&g_font, static_cast<float>(pixel_h));
     int asc = 0;
     int desc = 0;
@@ -136,7 +135,6 @@ SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Colo
     stbtt_GetFontVMetrics(&g_font, &asc, &desc, &lgap);
     const float line_h = static_cast<float>(asc - desc) * scale;
 
-    // Measure.
     float width = 0.f;
     for (const char *p = text.c_str(); *p;) {
         int adv = 0;
@@ -219,7 +217,6 @@ void fill_rect(SDL_Renderer *renderer, SDL_Color color, float x, float y, float 
     SDL_RenderFillRect(renderer, &rect);
 }
 
-// Loads a PNG icon (stb_image) into a texture; returns nullptr on failure.
 SDL_Texture *load_icon(SDL_Renderer *renderer, const std::string &path) {
     int w = 0;
     int h = 0;
@@ -227,157 +224,151 @@ SDL_Texture *load_icon(SDL_Renderer *renderer, const std::string &path) {
     unsigned char *pixels = stbi_load(path.c_str(), &w, &h, &comp, 4);
     if (!pixels || w <= 0 || h <= 0)
         return nullptr;
-
     SDL_Surface *surface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA8888, pixels, w * 4);
     stbi_image_free(pixels);
     if (!surface)
         return nullptr;
-
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_DestroySurface(surface);
     return texture;
 }
 
-// Draws a rounded-ish row card: surface fill, icon, title, title id.
-void draw_row(SDL_Renderer *renderer, const LauncherRow &row) {
-    const SDL_Color fill = COLOR_SURFACE_HI;
-    fill_rect(renderer, fill, row.rect.x, row.rect.y, row.rect.w, row.rect.h);
+// --- Shell settings (persisted to <home>/Documents/vita3k_shell.cfg) -------
 
-    const float icon_x = row.rect.x + 14.f;
-    const float icon_y = row.rect.y + 8.f;
-    constexpr float ICON_SIZE = 56.f;
-    if (row.icon) {
-        SDL_FRect dst{ icon_x, icon_y, ICON_SIZE, ICON_SIZE };
-        SDL_RenderTexture(renderer, row.icon, nullptr, &dst);
-    } else {
-        fill_rect(renderer, COLOR_ACCENT, icon_x, icon_y, ICON_SIZE, ICON_SIZE);
-    }
+struct ShellSettings {
+    bool show_onscreen = true;
+    bool hide_overlay_on_controller = true;
+    bool show_l2r2 = false;
+    bool show_l3r3 = false;
+    bool show_touch_switch = true;
+    bool show_hide_toggle = false;
+};
 
-    draw_text(renderer, row.label, COLOR_TEXT, row.rect.x + 84.f, row.rect.y + 8.f, 15);
-    draw_text(renderer, row.title_id, COLOR_TEXT_DIM, row.rect.x + 84.f, row.rect.y + 34.f, 12);
+std::string shell_cfg_path() {
+    const char *home = getenv("HOME");
+    return std::string(home ? home : ".") + "/Documents/vita3k_shell.cfg";
 }
 
-void destroy_rows(std::vector<LauncherRow> &rows) {
-    for (auto &row : rows) {
-        SDL_DestroyTexture(row.icon);
-        row.icon = nullptr;
+void load_shell_settings(ShellSettings &s) {
+    std::ifstream in(shell_cfg_path());
+    if (!in.is_open())
+        return;
+    std::string line;
+    while (std::getline(in, line)) {
+        const auto eq = line.find('=');
+        if (eq == std::string::npos)
+            continue;
+        const std::string k = line.substr(0, eq);
+        const bool v = line.substr(eq + 1) == "1";
+        if (k == "show_onscreen")
+            s.show_onscreen = v;
+        else if (k == "hide_overlay_on_controller")
+            s.hide_overlay_on_controller = v;
+        else if (k == "show_l2r2")
+            s.show_l2r2 = v;
+        else if (k == "show_l3r3")
+            s.show_l3r3 = v;
+        else if (k == "show_touch_switch")
+            s.show_touch_switch = v;
+        else if (k == "show_hide_toggle")
+            s.show_hide_toggle = v;
     }
 }
 
-int run_launcher(EmuEnvState &emuenv, app::AppSessionController &session) {
-    bool quit = false;
+void save_shell_settings(const ShellSettings &s) {
+    std::ofstream out(shell_cfg_path());
+    if (!out.is_open())
+        return;
+    out << "show_onscreen=" << (s.show_onscreen ? 1 : 0) << "\n"
+        << "hide_overlay_on_controller=" << (s.hide_overlay_on_controller ? 1 : 0) << "\n"
+        << "show_l2r2=" << (s.show_l2r2 ? 1 : 0) << "\n"
+        << "show_l3r3=" << (s.show_l3r3 ? 1 : 0) << "\n"
+        << "show_touch_switch=" << (s.show_touch_switch ? 1 : 0) << "\n"
+        << "show_hide_toggle=" << (s.show_hide_toggle ? 1 : 0) << "\n";
+}
 
-    while (!quit) {
-        if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC | SDL_INIT_SENSOR)) {
-            LOG_ERROR("SDL_Init failed in launcher: {}", SDL_GetError());
-            return 1;
+// --- Screens / model -------------------------------------------------------
+
+enum class Screen { Library, Settings, InstallPkg };
+enum class SettingsTab { Controls, Interface, Emulator };
+
+struct LauncherRow {
+    std::string title_id;
+    std::string label;
+    SDL_FRect rect;
+    SDL_Texture *icon = nullptr;
+};
+
+struct ToggleItem {
+    std::string label;
+    std::string status;
+    bool *value;
+};
+
+struct StaticItem {
+    std::string label;
+    std::string status;
+};
+
+struct PkgEntry {
+    std::string path;
+    std::string name;
+};
+
+struct PkgInstallState {
+    bool installing = false;
+    float progress = 0.f;
+    std::string message;
+    std::string active_name;
+};
+
+// --- UI helpers ------------------------------------------------------------
+
+void draw_toggle(SDL_Renderer *r, bool on, float x, float y) {
+    constexpr float W = 52.f;
+    constexpr float H = 28.f;
+    fill_rect(r, on ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF, x, y, W, H);
+    const float knob = on ? x + W - H : x;
+    fill_rect(r, COLOR_TEXT, knob + 2.f, y + 2.f, H - 4.f, H - 4.f);
+}
+
+void draw_row_card(SDL_Renderer *r, float x, float y, float w, float h) {
+    fill_rect(r, COLOR_SURFACE_HI, x, y, w, h);
+}
+
+void draw_toggle_row(SDL_Renderer *r, float x, float y, float w, const ToggleItem &item) {
+    draw_row_card(r, x, y, w, ROW_H);
+    draw_text(r, item.label, COLOR_TEXT, x + 16.f, y + 10.f, 14);
+    draw_text(r, item.status, COLOR_TEXT_DIM, x + 16.f, y + 40.f, 11);
+    draw_toggle(r, *item.value, x + w - 70.f, y + (ROW_H - 28.f) / 2.f);
+}
+
+void draw_static_row(SDL_Renderer *r, float x, float y, float w, const StaticItem &item) {
+    draw_row_card(r, x, y, w, ROW_H);
+    draw_text(r, item.label, COLOR_TEXT, x + 16.f, y + 10.f, 14);
+    draw_text(r, item.status, COLOR_TEXT_DIM, x + 16.f, y + 40.f, 11);
+}
+
+std::vector<PkgEntry> scan_pkgs() {
+    std::vector<PkgEntry> out;
+    const char *home = getenv("HOME");
+    const std::string dir = std::string(home ? home : ".") + "/Documents";
+    std::error_code ec;
+    if (!std::filesystem::exists(dir, ec))
+        return out;
+    for (const auto &ent : std::filesystem::directory_iterator(dir, ec)) {
+        if (!ent.is_regular_file(ec))
+            continue;
+        const auto ext = ent.path().extension().string();
+        if (ext == ".pkg" || ext == ".PKG") {
+            PkgEntry e;
+            e.path = ent.path().string();
+            e.name = ent.path().filename().string();
+            out.push_back(std::move(e));
         }
-
-        SDL_Window *window = SDL_CreateWindow("Vita3K", LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_WINDOW_FULLSCREEN);
-        if (!window) {
-            LOG_ERROR("SDL_CreateWindow failed in launcher: {}", SDL_GetError());
-            return 1;
-        }
-        SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
-        if (!renderer) {
-            LOG_ERROR("SDL_CreateRenderer failed in launcher: {}", SDL_GetError());
-            SDL_DestroyWindow(window);
-            return 1;
-        }
-        SDL_SetRenderLogicalPresentation(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_LOGICAL_PRESENTATION_LETTERBOX);
-
-        const auto apps = app::get_apps(emuenv);
-        std::vector<LauncherRow> rows;
-        rows.reserve(apps.size());
-        for (const auto &entry : apps) {
-            if (entry.category != "gd")
-                continue;
-            LauncherRow row;
-            row.title_id = entry.title_id;
-            row.label = entry.title;
-            if (row.label.empty())
-                row.label = entry.title_id;
-            row.rect = SDL_FRect{ 12.f, 56.f + static_cast<float>(rows.size()) * 76.f, 936.f, 72.f };
-            if (!entry.icon_path.empty())
-                row.icon = load_icon(renderer, entry.icon_path);
-            rows.push_back(std::move(row));
-        }
-
-        std::string selected;
-        bool boot = false;
-
-        while (!boot && !quit) {
-            SDL_Event event;
-            while (SDL_PollEvent(&event)) {
-                switch (event.type) {
-                case SDL_EVENT_QUIT:
-                    quit = true;
-                    break;
-                case SDL_EVENT_FINGER_DOWN: {
-                    const float px = event.tfinger.x * LOGICAL_WIDTH;
-                    const float py = event.tfinger.y * LOGICAL_HEIGHT;
-                    for (const auto &row : rows) {
-                        if (px >= row.rect.x && px <= row.rect.x + row.rect.w
-                            && py >= row.rect.y && py <= row.rect.y + row.rect.h) {
-                            selected = row.title_id;
-                            boot = true;
-                            break;
-                        }
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
-            }
-
-            // Background.
-            fill_rect(renderer, COLOR_BG, 0.f, 0.f, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-
-            // Top app bar.
-            fill_rect(renderer, COLOR_SURFACE, 0.f, 0.f, LOGICAL_WIDTH, 52.f);
-            draw_text(renderer, "Vita3K", COLOR_TEXT, 16.f, 13.f, 24);
-            draw_text(renderer, "iOS port", COLOR_TEXT_DIM, 860.f, 20.f, 13);
-
-            if (rows.empty()) {
-                // Empty library, Android-app style centred hint.
-                draw_text(renderer, "No games found", COLOR_TEXT, 320.f, 196.f, 22);
-                draw_text(renderer, "Copy a game folder into:", COLOR_TEXT_DIM, 330.f, 234.f, 13);
-                draw_text(renderer, "Files app -> Vita3K -> Documents -> ux0/app/<TITLEID>/",
-                    COLOR_TEXT_DIM, 240.f, 256.f, 12);
-            } else {
-                for (const auto &row : rows)
-                    draw_row(renderer, row);
-            }
-
-            draw_text(renderer, "Tap a title to boot. Physical controller (MFi / PS / Xbox) for buttons.",
-                COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 48.f, 11);
-            draw_text(renderer, "Dynarmic JIT needs a JIT-enabled sideload (Docs/INSTALLING.md).",
-                COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 30.f, 11);
-
-            SDL_RenderPresent(renderer);
-            SDL_Delay(16);
-        }
-
-        destroy_rows(rows);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-
-        if (quit)
-            break;
-
-        LOG_INFO("Booting title '{}'", selected);
-        AppLaunchRequest request;
-        request.app_path = selected;
-        const int exit_code = sdl_frontend::run(emuenv, session, request);
-        LOG_INFO("Game session '{}' ended with code {}", selected, exit_code);
-
-        // The session tears SDL down with it; refresh the app list for the
-        // next launcher pass in case content changed.
-        app::init_apps_list(emuenv);
     }
-
-    return 0;
+    std::sort(out.begin(), out.end(), [](const PkgEntry &a, const PkgEntry &b) { return a.name < b.name; });
+    return out;
 }
 
 } // namespace
@@ -385,11 +376,6 @@ int run_launcher(EmuEnvState &emuenv, app::AppSessionController &session) {
 // SDL3 entry point. SDL3 provides the UIKit application lifecycle; this runs
 // on the main thread once the app is up.
 int SDL_main(int argc, char *argv[]) {
-    // Lock the app to landscape on real devices. The Info.plist already
-    // declares landscape-only orientations, but SDL3's UIKit backend drives
-    // the view orientation from this hint; without it a portrait-held device
-    // rotates the 960x544 frame by 90 degrees and touch coordinates no longer
-    // match the UI.
     SDL_SetHint("SDL_HINT_ORIENTATIONS", "LandscapeLeft,LandscapeRight");
 
     Root root_paths;
@@ -428,5 +414,346 @@ int SDL_main(int argc, char *argv[]) {
     app::load_users(emuenv);
 
     app::AppSessionController session(emuenv);
-    return run_launcher(emuenv, session);
+
+    // --- Shell state -------------------------------------------------------
+    ShellSettings shell;
+    load_shell_settings(shell);
+
+    Screen screen = Screen::Library;
+    SettingsTab settings_tab = SettingsTab::Controls;
+    float scroll = 0.f;
+
+    std::vector<ToggleItem> controls_items;
+    controls_items.push_back({ "Show On-Screen Controls", "Enabled", &shell.show_onscreen });
+    controls_items.push_back({ "Hide Overlay When Controller Is Connected", "No controller connected", &shell.hide_overlay_on_controller });
+    controls_items.push_back({ "Show L2 / R2 Buttons", "Disabled", &shell.show_l2r2 });
+    controls_items.push_back({ "Show L3 / R3 Buttons", "Disabled", &shell.show_l3r3 });
+    controls_items.push_back({ "Show Touchscreen Switch", "Enabled", &shell.show_touch_switch });
+    controls_items.push_back({ "Show Hide Toggle", "Disabled", &shell.show_hide_toggle });
+
+    std::vector<StaticItem> interface_items;
+    interface_items.push_back({ "Language", "English" });
+    interface_items.push_back({ "Theme", "Dark" });
+
+    std::vector<StaticItem> emulator_items;
+    emulator_items.push_back({ "CPU Mode", "JIT (Dynarmic)" });
+    emulator_items.push_back({ "Allow JIT", "Enabled (sideload required)" });
+
+    std::vector<PkgEntry> pkgs = scan_pkgs();
+    PkgInstallState pkg_state;
+
+    bool quit = false;
+
+    while (!quit) {
+        if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC | SDL_INIT_SENSOR)) {
+            LOG_ERROR("SDL_Init failed: {}", SDL_GetError());
+            return 1;
+        }
+        SDL_Window *window = SDL_CreateWindow("Vita3K", LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_WINDOW_FULLSCREEN);
+        if (!window) {
+            LOG_ERROR("SDL_CreateWindow failed: {}", SDL_GetError());
+            return 1;
+        }
+        SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
+        if (!renderer) {
+            LOG_ERROR("SDL_CreateRenderer failed: {}", SDL_GetError());
+            SDL_DestroyWindow(window);
+            return 1;
+        }
+        SDL_SetRenderLogicalPresentation(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
+        const auto apps = app::get_apps(emuenv);
+        std::vector<LauncherRow> rows;
+        rows.reserve(apps.size());
+        for (const auto &entry : apps) {
+            if (entry.category != "gd")
+                continue;
+            LauncherRow row;
+            row.title_id = entry.title_id;
+            row.label = entry.title;
+            if (row.label.empty())
+                row.label = entry.title_id;
+            row.rect = SDL_FRect{ 12.f, APPBAR_H + 4.f + static_cast<float>(rows.size()) * (ROW_H + ROW_GAP), 936.f, ROW_H };
+            if (!entry.icon_path.empty())
+                row.icon = load_icon(renderer, entry.icon_path);
+            rows.push_back(std::move(row));
+        }
+
+        std::string boot_title;
+        bool boot = false;
+
+        bool touching = false;
+        bool dragged = false;
+        float touch_x = 0.f;
+        float touch_y = 0.f;
+        float last_finger_y = 0.f;
+
+        auto content_height = [&]() -> int {
+            if (screen == Screen::Library)
+                return APPBAR_H + 4 + static_cast<int>(rows.size()) * (ROW_H + ROW_GAP) - ROW_GAP;
+            if (screen == Screen::Settings) {
+                const int count = settings_tab == SettingsTab::Controls ? static_cast<int>(controls_items.size())
+                    : settings_tab == SettingsTab::Interface ? static_cast<int>(interface_items.size())
+                    : static_cast<int>(emulator_items.size());
+                return APPBAR_H + 4 + 44 + count * (ROW_H + ROW_GAP);
+            }
+            return APPBAR_H + 4 + 44 + static_cast<int>(pkgs.size()) * (ROW_H + ROW_GAP);
+        };
+
+        while (!boot && !quit) {
+            SDL_Event event;
+            while (SDL_PollEvent(&event)) {
+                switch (event.type) {
+                case SDL_EVENT_QUIT:
+                    quit = true;
+                    break;
+                case SDL_EVENT_FINGER_DOWN: {
+                    touching = true;
+                    dragged = false;
+                    touch_x = event.tfinger.x * LOGICAL_WIDTH;
+                    touch_y = event.tfinger.y * LOGICAL_HEIGHT;
+                    last_finger_y = touch_y;
+                    break;
+                }
+                case SDL_EVENT_FINGER_MOTION: {
+                    if (!touching)
+                        break;
+                    const float fy = event.tfinger.y * LOGICAL_HEIGHT;
+                    const float dy = fy - last_finger_y;
+                    last_finger_y = fy;
+                    if (!dragged && (dy > 6.f || dy < -6.f))
+                        dragged = true;
+                    if (dragged) {
+                        const int max_scroll = std::max(0, content_height() - (LOGICAL_HEIGHT - APPBAR_H));
+                        scroll -= dy;
+                        scroll = std::clamp(scroll, 0.f, static_cast<float>(max_scroll));
+                    }
+                    break;
+                }
+                case SDL_EVENT_FINGER_UP: {
+                    if (!touching)
+                        break;
+                    const bool was_drag = dragged;
+                    touching = false;
+                    if (was_drag)
+                        break;
+
+                    const float px = touch_x;
+                    const float py = touch_y;
+
+                    if (py < APPBAR_H) {
+                        if (screen == Screen::Library) {
+                            if (px > 660.f && px < 780.f) { // Settings
+                                screen = Screen::Settings;
+                                scroll = 0.f;
+                                break;
+                            }
+                            if (px > 790.f && px < 946.f) { // Install
+                                pkgs = scan_pkgs();
+                                screen = Screen::InstallPkg;
+                                scroll = 0.f;
+                                break;
+                            }
+                        } else if (px < 80.f) { // back
+                            screen = Screen::Library;
+                            scroll = 0.f;
+                            break;
+                        }
+                        break;
+                    }
+
+                    const float list_y = py + scroll;
+
+                    if (screen == Screen::Library) {
+                        for (const auto &row : rows) {
+                            if (px >= row.rect.x && px <= row.rect.x + row.rect.w
+                                && list_y >= row.rect.y && list_y <= row.rect.y + row.rect.h) {
+                                boot_title = row.title_id;
+                                boot = true;
+                                break;
+                            }
+                        }
+                    } else if (screen == Screen::Settings) {
+                        if (list_y > APPBAR_H && list_y < APPBAR_H + 44.f) {
+                            if (px > 8.f && px < 324.f)
+                                settings_tab = SettingsTab::Controls;
+                            else if (px > 324.f && px < 640.f)
+                                settings_tab = SettingsTab::Interface;
+                            else
+                                settings_tab = SettingsTab::Emulator;
+                            scroll = 0.f;
+                            break;
+                        }
+                        const float tab_bottom = APPBAR_H + 44.f;
+                        if (settings_tab == SettingsTab::Controls) {
+                            for (int i = 0; i < static_cast<int>(controls_items.size()); ++i) {
+                                const float ry = tab_bottom + 4.f + i * (ROW_H + ROW_GAP);
+                                if (list_y >= ry && list_y <= ry + ROW_H) {
+                                    *controls_items[i].value = !*controls_items[i].value;
+                                    controls_items[i].status = *controls_items[i].value ? "Enabled" : "Disabled";
+                                    save_shell_settings(shell);
+                                    break;
+                                }
+                            }
+                        }
+                    } else if (screen == Screen::InstallPkg) {
+                        const float tab_bottom = APPBAR_H + 44.f;
+                        if (!pkg_state.installing) {
+                            for (int i = 0; i < static_cast<int>(pkgs.size()); ++i) {
+                                const float ry = tab_bottom + 4.f + i * (ROW_H + ROW_GAP);
+                                if (list_y >= ry && list_y <= ry + ROW_H) {
+                                    pkg_state.installing = true;
+                                    pkg_state.progress = 0.f;
+                                    pkg_state.active_name = pkgs[i].name;
+                                    pkg_state.message.clear();
+                                    std::string zrif;
+                                    const bool ok = install_pkg(fs::path(pkgs[i].path), emuenv, zrif,
+                                        [&](float prog) { pkg_state.progress = prog; });
+                                    pkg_state.installing = false;
+                                    pkg_state.message = ok ? "Installed successfully"
+                                        : "Install failed (needs zRIF / corrupt pkg)";
+                                    app::init_apps_list(emuenv);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+                default:
+                    break;
+                }
+            }
+
+            // --- Draw frame -------------------------------------------------
+            fill_rect(renderer, COLOR_BG, 0.f, 0.f, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+            // App bar.
+            fill_rect(renderer, COLOR_SURFACE, 0.f, 0.f, LOGICAL_WIDTH, APPBAR_H);
+            if (screen == Screen::Library) {
+                draw_text(renderer, "Vita3K", COLOR_TEXT, 16.f, 13.f, 24);
+                draw_text(renderer, "iOS port", COLOR_TEXT_DIM, 860.f, 20.f, 13);
+                draw_text(renderer, "Settings", COLOR_TEXT_DIM, 678.f, 18.f, 14);
+                draw_text(renderer, "Install", COLOR_TEXT_DIM, 806.f, 18.f, 14);
+            } else {
+                draw_text(renderer, "<", COLOR_TEXT, 18.f, 13.f, 24);
+                draw_text(renderer, screen == Screen::Settings ? "Settings" : "Install PKG",
+                    COLOR_TEXT, 84.f, 13.f, 20);
+            }
+
+            if (screen == Screen::Library) {
+                for (const auto &row : rows) {
+                    const float ry = row.rect.y - scroll;
+                    if (ry + ROW_H < APPBAR_H || ry > LOGICAL_HEIGHT)
+                        continue;
+                    draw_row_card(renderer, row.rect.x, ry, row.rect.w, row.rect.h);
+                    const float icon_x = row.rect.x + 14.f;
+                    const float icon_y = ry + 8.f;
+                    constexpr float ICON_SIZE = 56.f;
+                    if (row.icon) {
+                        SDL_FRect dst{ icon_x, icon_y, ICON_SIZE, ICON_SIZE };
+                        SDL_RenderTexture(renderer, row.icon, nullptr, &dst);
+                    } else {
+                        fill_rect(renderer, COLOR_ACCENT, icon_x, icon_y, ICON_SIZE, ICON_SIZE);
+                    }
+                    draw_text(renderer, row.label, COLOR_TEXT, row.rect.x + 84.f, ry + 8.f, 15);
+                    draw_text(renderer, row.title_id, COLOR_TEXT_DIM, row.rect.x + 84.f, ry + 34.f, 12);
+                }
+                if (rows.empty()) {
+                    draw_text(renderer, "No games found", COLOR_TEXT, 320.f, 190.f, 22);
+                    draw_text(renderer, "Tap Install in the top bar to add a .pkg, or copy a game folder into:",
+                        COLOR_TEXT_DIM, 210.f, 228.f, 13);
+                    draw_text(renderer, "Files app -> Vita3K -> Documents -> ux0/app/<TITLEID>/",
+                        COLOR_TEXT_DIM, 240.f, 250.f, 12);
+                }
+                draw_text(renderer, "Tap a title to boot. Physical controller (MFi / PS / Xbox) for buttons.",
+                    COLOR_TEXT_DIM, 24.f, LOGICAL_HEIGHT - 22.f, 11);
+            } else if (screen == Screen::Settings) {
+                const float tab_y = APPBAR_H + 4.f;
+                const std::array<const char *, 3> tabs = { "Controls", "Interface", "Emulator" };
+                const std::array<SDL_Color, 3> tab_colors = {
+                    settings_tab == SettingsTab::Controls ? COLOR_TAB_ON : COLOR_TEXT_DIM,
+                    settings_tab == SettingsTab::Interface ? COLOR_TAB_ON : COLOR_TEXT_DIM,
+                    settings_tab == SettingsTab::Emulator ? COLOR_TAB_ON : COLOR_TEXT_DIM,
+                };
+                const std::array<float, 3> tab_x = { 8.f, 324.f, 640.f };
+                for (int i = 0; i < 3; ++i)
+                    draw_text(renderer, tabs[i], tab_colors[i], tab_x[i], tab_y + 8.f, 16);
+                fill_rect(renderer, COLOR_SURFACE_HI, 0.f, APPBAR_H + 44.f, LOGICAL_WIDTH, 1.f);
+
+                const float tab_bottom = APPBAR_H + 44.f;
+                if (settings_tab == SettingsTab::Controls) {
+                    for (int i = 0; i < static_cast<int>(controls_items.size()); ++i) {
+                        const float ry = tab_bottom + 4.f - scroll + i * (ROW_H + ROW_GAP);
+                        if (ry + ROW_H < APPBAR_H || ry > LOGICAL_HEIGHT)
+                            continue;
+                        draw_toggle_row(renderer, 12.f, ry, 936.f, controls_items[i]);
+                    }
+                } else if (settings_tab == SettingsTab::Interface) {
+                    for (int i = 0; i < static_cast<int>(interface_items.size()); ++i) {
+                        const float ry = tab_bottom + 4.f - scroll + i * (ROW_H + ROW_GAP);
+                        if (ry + ROW_H < APPBAR_H || ry > LOGICAL_HEIGHT)
+                            continue;
+                        draw_static_row(renderer, 12.f, ry, 936.f, interface_items[i]);
+                    }
+                } else {
+                    for (int i = 0; i < static_cast<int>(emulator_items.size()); ++i) {
+                        const float ry = tab_bottom + 4.f - scroll + i * (ROW_H + ROW_GAP);
+                        if (ry + ROW_H < APPBAR_H || ry > LOGICAL_HEIGHT)
+                            continue;
+                        draw_static_row(renderer, 12.f, ry, 936.f, emulator_items[i]);
+                    }
+                }
+            } else if (screen == Screen::InstallPkg) {
+                if (pkg_state.installing) {
+                    draw_text(renderer, "Installing " + pkg_state.active_name, COLOR_TEXT, 40.f, 110.f, 18);
+                    fill_rect(renderer, COLOR_SURFACE_HI, 40.f, 140.f, 880.f, 22.f);
+                    fill_rect(renderer, COLOR_ACCENT, 40.f, 140.f, 880.f * std::clamp(pkg_state.progress, 0.f, 1.f), 22.f);
+                    draw_text(renderer, std::to_string(static_cast<int>(pkg_state.progress * 100.f)) + "%",
+                        COLOR_TEXT, 460.f, 142.f, 14);
+                } else {
+                    if (!pkg_state.message.empty()) {
+                        const bool failed = pkg_state.message.rfind("Install failed", 0) == 0;
+                        draw_text(renderer, pkg_state.message, failed ? COLOR_ERROR : COLOR_ACCENT, 40.f, 104.f, 15);
+                    }
+                    draw_text(renderer, "PKG files in the app Documents folder:", COLOR_TEXT_DIM, 40.f, 64.f, 12);
+                    if (pkgs.empty()) {
+                        draw_text(renderer, "No .pkg files found.", COLOR_TEXT, 40.f, 130.f, 16);
+                        draw_text(renderer, "Put <name>.pkg into Files app -> Vita3K, then reopen this screen.",
+                            COLOR_TEXT_DIM, 40.f, 158.f, 12);
+                    } else {
+                        const float tab_bottom = APPBAR_H + 44.f;
+                        for (int i = 0; i < static_cast<int>(pkgs.size()); ++i) {
+                            const float ry = tab_bottom + 4.f - scroll + i * (ROW_H + ROW_GAP);
+                            if (ry + ROW_H < APPBAR_H || ry > LOGICAL_HEIGHT)
+                                continue;
+                            draw_row_card(renderer, 12.f, ry, 936.f, ROW_H);
+                            draw_text(renderer, pkgs[i].name, COLOR_TEXT, 28.f, ry + 10.f, 14);
+                            draw_text(renderer, "Tap to install", COLOR_TEXT_DIM, 28.f, ry + 40.f, 11);
+                        }
+                    }
+                }
+            }
+
+            SDL_RenderPresent(renderer);
+            SDL_Delay(16);
+        }
+
+        for (auto &row : rows)
+            SDL_DestroyTexture(row.icon);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+
+        if (quit)
+            break;
+
+        LOG_INFO("Booting title '{}'", boot_title);
+        AppLaunchRequest request;
+        request.app_path = boot_title;
+        const int exit_code = sdl_frontend::run(emuenv, session, request);
+        LOG_INFO("Game session '{}' ended with code {}", boot_title, exit_code);
+        app::init_apps_list(emuenv);
+    }
+
+    return 0;
 }
