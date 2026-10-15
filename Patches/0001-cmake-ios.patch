@@ -1,11 +1,11 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d9edf97..9e35905 100644
+index 5850f09..cef1bd4 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -19,7 +19,13 @@ include("external/dynarmic/CMakeModules/DetectArchitecture.cmake")
- set(CMAKE_CXX_STANDARD 23)
- set(CMAKE_CXX_STANDARD_REQUIRED ON)
- set(CMAKE_CXX_EXTENSIONS OFF)
+@@ -19,7 +19,11 @@ include("external/dynarmic/CMakeModules/DetectArchitecture.cmake")
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 -set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3)
 +# iOS requires at least 14.0 for std::atomic wait/notify and we target 15.0
 +# (matches the minimum of the pinned MoltenVK static library).
@@ -17,7 +17,7 @@ index d9edf97..9e35905 100644
  
  # workaround for SDL due to cmake bug
  # https://github.com/libsdl-org/SDL/issues/6454
-@@ -45,7 +51,7 @@ if(ANDROID)
+@@ -45,7 +49,7 @@ if(ANDROID)
  		set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
  	endif()
  else()
@@ -26,7 +26,7 @@ index d9edf97..9e35905 100644
  		option(USE_DISCORD_RICH_PRESENCE "Build Vita3K with Discord Rich Presence" ON)
  	endif()
  	option(BUILD_APPIMAGE "Build an AppImage." OFF)
-@@ -149,6 +155,62 @@ macro(boost_compile)
+@@ -149,6 +153,62 @@ macro(boost_compile)
  			WORKING_DIRECTORY ${BOOST_SOURCEDIR}
  			OUTPUT_QUIET
  		)
@@ -67,9 +67,8 @@ index d9edf97..9e35905 100644
 +			"set(Boost_VERSION 1.89.0)\n"
 +			"set(Boost_VERSION_STRING \"1.89.0\")\n"
 +			"set(Boost_FOUND TRUE)\n"
-+			"set(Boost_INCLUDE_DIRS \"${BOOST_SOURCEDIR}\")\n"
++			"set(Boost_INCLUDE_DIRS \"${BOOST_SOURCEDIR}\") \n"
 +			"set(Boost_LIBRARY_DIRS \"${BOOST_INSTALLDIR}/lib\")\n"
-+			# The archive is built directly above (b2 skips it on iOS).
 +			"set(Boost_LIBRARIES \"${BOOST_INSTALLDIR}/lib/libboost_filesystem.a\")\n"
 +			"set(Boost_filesystem_FOUND TRUE)\n"
 +		)
@@ -86,6 +85,7 @@ index d9edf97..9e35905 100644
 +		)
 +		# Point config-mode find_package(Boost) straight at our config file.
 +		set(Boost_DIR "${BOOST_INSTALLDIR}")
++
  	elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
  		execute_process(
  			COMMAND ${b2_cmd_line_common} --ignore-site-config toolset=${BOOST_TOOLSET} stage
