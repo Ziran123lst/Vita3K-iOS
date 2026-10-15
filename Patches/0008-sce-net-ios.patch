@@ -20,7 +20,7 @@ index bdc7921..ce6605c 100644
      target_link_libraries(modules PUBLIC "-framework SystemConfiguration")
  endif()
 diff --git a/vita3k/modules/SceNet/SceNet.cpp b/vita3k/modules/SceNet/SceNet.cpp
-index f14623f..fb8c90f 100644
+index 9472e39..9c93723 100644
 --- a/vita3k/modules/SceNet/SceNet.cpp
 +++ b/vita3k/modules/SceNet/SceNet.cpp
 @@ -28,7 +28,7 @@
@@ -32,23 +32,33 @@ index f14623f..fb8c90f 100644
  #include "macos_net_helper.h"
  #include <net/if.h>
  #endif
-@@ -367,7 +367,7 @@ EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
-         };
-         memcpy(addr->data, magicMac, 6);
+@@ -313,7 +313,7 @@ EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
+         }
      }
+     RET_NET_ERRNO(SCE_NET_ERROR_EINVAL);
+-#elif defined(__unix__)
++#elif defined(__unix__) && !defined(__IPHONEOS__)
+     struct ifreq ifr{};
+ 
+     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+@@ -345,7 +345,7 @@ EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
+     if (ioctl(sock, SIOCGIFHWADDR, &ifr) == -1)
+         RET_NET_ERRNO(SCE_NET_ERROR_EINVAL);
+     memcpy(addr->data, ifr.ifr_hwaddr.sa_data, 6);
 -#elif defined(__APPLE__)
 +#elif defined(__APPLE__) && !defined(__IPHONEOS__)
      char hint[IFNAMSIZ] = {};
-     get_primary_interface_name(hint, sizeof(hint));
+     if (selected_addr.name.rfind("en", 0) != 0)
+         RET_NET_ERRNO(SCE_NET_ERROR_EINVAL);
+@@ -353,6 +353,19 @@ EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
  
-@@ -382,6 +382,18 @@ EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
-         };
-         memcpy(addr->data, magicMac, 6);
-     }
+     if (!get_mac_address(hint, addr->data))
+         RET_NET_ERRNO(SCE_NET_ERROR_EINVAL);
 +#elif defined(__IPHONEOS__)
 +    // iOS has no SystemConfiguration-based helper (SCDynamicStore is
-+    // macOS-only); report a deterministic locally administered address.
-+    uint8_t magicMac[6] = {
++    // macOS-only) and no usable interface MAC; report a deterministic
++    // locally administered address instead.
++    const uint8_t magic_mac[6] = {
 +        0x02, // LAA
 +        0x49, // 'I'
 +        0x4F, // 'O'
@@ -56,7 +66,7 @@ index f14623f..fb8c90f 100644
 +        0x56, // 'V'
 +        0x49, // 'I'
 +    };
-+    memcpy(addr->data, magicMac, 6);
++    memcpy(addr->data, magic_mac, sizeof(addr->data));
  #else
      return UNIMPLEMENTED();
  #endif
