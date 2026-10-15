@@ -283,8 +283,10 @@ SDL_Texture *build_gradient(SDL_Renderer *renderer, SDL_Color top, SDL_Color bot
             const uint8_t r = static_cast<uint8_t>(top.r + (bottom.r - top.r) * t);
             const uint8_t g = static_cast<uint8_t>(top.g + (bottom.g - top.g) * t);
             const uint8_t b = static_cast<uint8_t>(top.b + (bottom.b - top.b) * t);
-            const uint32_t c = static_cast<uint32_t>(0xff000000u) | (static_cast<uint32_t>(r) << 16)
-                | (static_cast<uint32_t>(g) << 8) | static_cast<uint32_t>(b);
+            // Must use SDL_MapSurfaceRGBA: RGBA8888's in-memory byte order is
+            // R,G,B,A, so a hand-written 0xFFRRGGBB literal would swap red and
+            // blue on the Metal renderer.
+            const uint32_t c = SDL_MapSurfaceRGBA(surface, r, g, b, 0xff);
             for (int col = 0; col < w; ++col)
                 pixels[row * pitch_px + col] = c;
         }
