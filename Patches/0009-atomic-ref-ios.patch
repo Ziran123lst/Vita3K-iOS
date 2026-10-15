@@ -1,0 +1,39 @@
+diff --git a/vita3k/modules/SceLibKernel/SceLibKernel.cpp b/vita3k/modules/SceLibKernel/SceLibKernel.cpp
+index de4e3df..c42dda2 100644
+--- a/vita3k/modules/SceLibKernel/SceLibKernel.cpp
++++ b/vita3k/modules/SceLibKernel/SceLibKernel.cpp
+@@ -39,6 +39,34 @@
+ #include <util/tracy.h>
+ 
+ #include <atomic>
++#if defined(__APPLE__) && defined(__IPHONEOS__) && !defined(__cpp_lib_atomic_ref)
++// Apple's iOS libc++ does not provide std::atomic_ref (C++20). Provide a
++// minimal equivalent backed by Clang __atomic builtins for the operations
++// Vita3K uses here (load / store / fetch_add / compare_exchange_*). The
++// upstream atomic-call implementation (#4243) requires it to compile on iOS.
++namespace std {
++template <typename T>
++class atomic_ref {
++public:
++    explicit atomic_ref(T &object) : m_ptr(&object) {}
++    atomic_ref(const atomic_ref &) = default;
++    atomic_ref &operator=(const atomic_ref &) = delete;
++
++    T load() const noexcept { return __atomic_load_n(m_ptr, __ATOMIC_SEQ_CST); }
++    void store(T value) noexcept { __atomic_store_n(m_ptr, value, __ATOMIC_SEQ_CST); }
++    T fetch_add(T value) noexcept { return __atomic_fetch_add(m_ptr, value, __ATOMIC_SEQ_CST); }
++    bool compare_exchange_strong(T &expected, T desired) noexcept {
++        return __atomic_compare_exchange_n(m_ptr, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
++    }
++    bool compare_exchange_weak(T &expected, T desired) noexcept {
++        return __atomic_compare_exchange_n(m_ptr, &expected, desired, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
++    }
++
++private:
++    T *m_ptr;
++};
++} // namespace std
++#endif
+ #include <cmath>
+ #include <cstdlib>
+ #include <type_traits>
