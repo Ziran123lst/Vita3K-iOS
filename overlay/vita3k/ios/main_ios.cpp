@@ -464,7 +464,7 @@ int run_launcher(EmuEnvState &emuenv, std::unique_ptr<app::AppSessionController>
     };
 
     std::vector<LauncherRow> rows;
-    std::vector<PkgEntry> pkgs;
+    auto pkgs = scan_pkgs();
     PkgInstallState pkg_state;
     ShellSettings shell;
     load_shell_settings(shell);
@@ -659,7 +659,7 @@ int run_launcher(EmuEnvState &emuenv, std::unique_ptr<app::AppSessionController>
                                     pkg_state.message = "Installing " + pkgs[i].name + "...";
                                     pkg_state.progress = 0.f;
                                     std::string zRIF;
-                                    const bool ok = packages::install_pkg(pkgs[i].path, emuenv, zRIF, [&](float p) {
+                                    const bool ok = install_pkg(pkgs[i].path, emuenv, zRIF, [&](float p) {
                                         pkg_state.progress = p;
                                     });
                                     pkg_state.installing = false;
