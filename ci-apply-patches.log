@@ -1,0 +1,62 @@
++ set -euo pipefail
++++ dirname Scripts/apply-patches.sh
+++ cd Scripts/..
+++ pwd
++ ROOT=/Users/runner/work/Vita3K-iOS/Vita3K-iOS
++ cd /Users/runner/work/Vita3K-iOS/Vita3K-iOS/upstream
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0001-cmake-ios.patch
++ echo '==> Applying 0001-cmake-ios.patch'
+==> Applying 0001-cmake-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0001-cmake-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0001-cmake-ios.patch
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0002-external-ios.patch
++ echo '==> Applying 0002-external-ios.patch'
+==> Applying 0002-external-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0002-external-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0002-external-ios.patch
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0003-vita3k-cmake-ios.patch
++ echo '==> Applying 0003-vita3k-cmake-ios.patch'
+==> Applying 0003-vita3k-cmake-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0003-vita3k-cmake-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0003-vita3k-cmake-ios.patch
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0004-app-init-paths-ios.patch
++ echo '==> Applying 0004-app-init-paths-ios.patch'
+==> Applying 0004-app-init-paths-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0004-app-init-paths-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0004-app-init-paths-ios.patch
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0005-audio-ios.patch
++ echo '==> Applying 0005-audio-ios.patch'
+==> Applying 0005-audio-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0005-audio-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0005-audio-ios.patch
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0006-ranges-contains-ios.patch
++ echo '==> Applying 0006-ranges-contains-ios.patch'
+==> Applying 0006-ranges-contains-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0006-ranges-contains-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0006-ranges-contains-ios.patch
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0007-metal-layer-ios.patch
++ echo '==> Applying 0007-metal-layer-ios.patch'
+==> Applying 0007-metal-layer-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0007-metal-layer-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0007-metal-layer-ios.patch
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0008-sce-net-ios.patch
++ echo '==> Applying 0008-sce-net-ios.patch'
+==> Applying 0008-sce-net-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0008-sce-net-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0008-sce-net-ios.patch
++ for patch in '"$ROOT"/Patches/*.patch'
+++ basename /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0009-atomic-ref-ios.patch
++ echo '==> Applying 0009-atomic-ref-ios.patch'
+==> Applying 0009-atomic-ref-ios.patch
++ git apply --check /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0009-atomic-ref-ios.patch
++ git apply /Users/runner/work/Vita3K-iOS/Vita3K-iOS/Patches/0009-atomic-ref-ios.patch
++ echo '==> All patches applied'
+==> All patches applied
