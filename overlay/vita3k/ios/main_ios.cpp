@@ -21,7 +21,9 @@
 // Version / Category / Last used / Name) and icon rows. A Settings screen
 // keeps the Android-style Controls / Interface / Emulator tabs, and the
 // Utilities screen installs .pkg files from the app Documents folder.
-// Text is rendered with stb_truetype (DroidSansFallbackFull.ttf) so CJK
+// Text is rendered with stb_truetype (NotoSansSC.ttf, Source Han Sans SC) so
+// both Latin and CJK glyphs are available. (DroidSansFallbackFull is CJK-only
+// and renders every Latin character as a box on iOS.)
 // titles display correctly.
 //
 // The UI comes up FIRST: window + renderer start before the emulator
@@ -116,7 +118,7 @@ bool init_shell_font() {
     const char *base = SDL_GetBasePath();
     if (!base)
         return false;
-    const std::string path = std::string(base) + "fonts/DroidSansFallbackFull.ttf";
+    const std::string path = std::string(base) + "fonts/NotoSansSC.ttf";
     size_t size = 0;
     g_font_data = static_cast<unsigned char *>(SDL_LoadFile(path.c_str(), &size));
     if (!g_font_data || size == 0)
@@ -915,7 +917,7 @@ int SDL_main(int argc, char *argv[]) {
         return InitConfigFailed;
 
     if (!init_shell_font())
-        LOG_WARN("Launcher font (DroidSansFallbackFull.ttf) not loaded; text will be missing");
+        LOG_WARN("Launcher font (NotoSansSC.ttf) not loaded; text will be missing");
 
     Config cfg{};
     EmuEnvState emuenv;
