@@ -117,6 +117,10 @@ static stbtt_fontinfo g_font;
 static unsigned char *g_font_data = nullptr;
 static bool g_font_ready = false;
 static std::string g_font_fail_reason;
+// Device pixel ratio (2.0/3.0 on iPhone/iPad). Bitmap text/background textures
+// are rasterised at this scale so they stay sharp when the 960x544 logical UI
+// is scaled up to the physical framebuffer.
+static float g_ui_scale = 1.f;
 
 #if defined(__APPLE__)
 // Returns [[NSBundle mainBundle] resourcePath] as a std::string, without
@@ -245,7 +249,8 @@ static const unsigned char kFont5x7[96 * 5] = {
 };
 
 static SDL_Texture *make_text_bitmap(SDL_Renderer *renderer, const std::string &text, SDL_Color color, int pixel_h) {
-    const int scale = pixel_h >= 24 ? 3 : (pixel_h >= 14 ? 2 : 1);
+    const int dpr = g_ui_scale > 1.f ? static_cast<int>(g_ui_scale + 0.5f) : 1;
+    const int scale = (pixel_h >= 24 ? 3 : (pixel_h >= 14 ? 2 : 1)) * dpr;
     const int cell_w = 6 * scale; // 5 columns + 1 gap
     const int cell_h = 8 * scale; // 7 rows + 1 gap
 
@@ -333,7 +338,9 @@ int utf8_next(const char *s, int &adv) {
 SDL_Texture *make_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color, int pixel_h) {
     if (!g_font_ready)
         return make_text_bitmap(renderer, text, color, pixel_h);
-    const float scale = stbtt_ScaleForPixelHeight(&g_font, static_cast<float>(pixel_h));
+    // Rasterise at device pixel resolution for sharp text on high-DPI screens.
+    const int raster_h = static_cast<int>(static_cast<float>(pixel_h) * g_ui_scale + 0.5f);
+    const float scale = stbtt_ScaleForPixelHeight(&g_font, static_cast<float>(raster_h));
     int asc = 0;
     int desc = 0;
     int lgap = 0;
@@ -441,7 +448,8 @@ void draw_text(SDL_Renderer *renderer, const std::string &text, SDL_Color color,
     float w = 0.f;
     float h = 0.f;
     SDL_GetTextureSize(texture, &w, &h);
-    SDL_FRect dst{ x, y, w, h };
+    // Texture is rasterised at g_ui_scale; shrink it back to logical size.
+    SDL_FRect dst{ x, y, w / g_ui_scale, h / g_ui_scale };
     SDL_RenderTexture(renderer, texture, nullptr, &dst);
 }
 
@@ -704,7 +712,8 @@ int run_launcher(EmuEnvState &emuenv, std::unique_ptr<app::AppSessionController>
             LOG_ERROR("SDL_Init failed: {}", SDL_GetError());
             return 1;
         }
-        SDL_Window *window = SDL_CreateWindow("Vita3K", LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_WINDOW_FULLSCREEN);
+        SDL_Window *window = SDL_CreateWindow("Vita3K", LOGICAL_WIDTH, LOGICAL_HEIGHT,
+            SDL_WINDOW_FULLSCREEN | SDL_WINDOW_HIGH_PIXEL_DENSITY);
         if (!window) {
             LOG_ERROR("SDL_CreateWindow failed: {}", SDL_GetError());
             return 1;
@@ -717,6 +726,11 @@ int run_launcher(EmuEnvState &emuenv, std::unique_ptr<app::AppSessionController>
         }
         SDL_SetRenderLogicalPresentation(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_LOGICAL_PRESENTATION_LETTERBOX);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        // High-DPI: render at physical pixels and rasterise text at this scale.
+        const float dpr = SDL_GetWindowDisplayScale(window);
+        if (dpr > 0.f)
+            g_ui_scale = dpr;
+        LOG_INFO("Display scale (device pixel ratio): {}", g_ui_scale);
         SDL_Texture *bg = build_gradient(renderer, COLOR_BG_TOP, COLOR_BG_BOTTOM, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
         bool rows_built = false;
